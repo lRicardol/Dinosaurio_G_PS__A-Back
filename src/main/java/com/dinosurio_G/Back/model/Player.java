@@ -13,15 +13,39 @@ public class Player {
     private boolean ready = false;
     private boolean host = false;
 
+    private int x;
+    private int y;
+    private int speed;
+    private int health;
+    private boolean arriba, abajo, izquierda, derecha;
+
     @ManyToOne
     @JoinColumn(name = "game_room_id")
     private GameRoom gameRoom;
 
     public Player() {}
 
-    public Player(String playerName, boolean host) {
+    public Player(String playerName, boolean host, int x, int y) {
         this.playerName = playerName;
         this.host = host;
+        this.x = x;
+        this.y = y;
+        this.speed = 5;
+        this.health = 100;
+    }
+
+    public void setInput(boolean arriba, boolean abajo, boolean izquierda, boolean derecha) {
+        this.arriba = arriba;
+        this.abajo = abajo;
+        this.izquierda = izquierda;
+        this.derecha = derecha;
+    }
+
+    public void actualizar() {
+        if (arriba && !abajo) y -= speed;
+        if (abajo && !arriba) y += speed;
+        if (izquierda && !derecha) x -= speed;
+        if (derecha && !izquierda) x += speed;
     }
 
     // Getters y Setters
@@ -34,4 +58,13 @@ public class Player {
     public void setHost(boolean host) { this.host = host; }
     public GameRoom getGameRoom() { return gameRoom; }
     public void setGameRoom(GameRoom gameRoom) { this.gameRoom = gameRoom; }
+
+    public int getX() { return x; }
+    public void setX(int x) { this.x = x; }
+    public int getY() { return y; }
+    public void setY(int y) { this.y = y; }
+    public int getSpeed() { return speed; }
+    public void setSpeed(int speed) { this.speed = speed; }
+    public int getHealth() { return health; }
+    public void setHealth(int health) { this.health = health; }
 }

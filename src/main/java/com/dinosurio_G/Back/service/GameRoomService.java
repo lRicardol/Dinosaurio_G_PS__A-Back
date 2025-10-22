@@ -5,6 +5,7 @@ import com.dinosurio_G.Back.model.Player;
 import com.dinosurio_G.Back.repository.GameRoomRepository;
 import com.dinosurio_G.Back.repository.PlayerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -91,4 +92,41 @@ public class GameRoomService {
         GameRoom room = getRoomByCode(roomCode);
         gameRoomRepository.delete(room);
     }
+    //Recibir input del jugador
+    public void updatePlayerInput(String roomCode, String playerName,
+                                  boolean arriba, boolean abajo,
+                                  boolean izquierda, boolean derecha) {
+        GameRoom room = getRoomByCode(roomCode);
+        Optional<Player> playerOpt = room.getPlayers().stream()
+                .filter(p -> p.getPlayerName().equals(playerName))
+                .findFirst();
+
+        if (playerOpt.isPresent()) {
+            Player player = playerOpt.get();
+            player.setInput(arriba, abajo, izquierda, derecha);
+            playerRepository.save(player);
+        } else {
+            throw new RuntimeException("Jugador no encontrado en la sala");
+        }
+    }
+
+    // Actualizar posiciones de todos los jugadores
+    public void updateGame(String roomCode) {
+        GameRoom room = getRoomByCode(roomCode);
+        room.getPlayers().forEach(player -> {
+            player.actualizar();
+            playerRepository.save(player);
+        });
+    }
+
+    @Scheduled(fixedRate = 50) // Cada 50 ms
+    public void updateAllRooms() {
+        gameRoomRepository.findAll().forEach(room -> {
+            if (room.isGameStarted()) {
+                updateGame(room.getRoomCode());
+            }
+        });
+    }
+
+
 }

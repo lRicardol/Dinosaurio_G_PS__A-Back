@@ -74,4 +74,20 @@ public class GameRoomController {
     public void deleteRoom(@PathVariable String roomCode) {
         gameRoomService.deleteRoom(roomCode);
     }
+
+    @PutMapping("/{roomCode}/move")
+    public GameRoomDTO updatePlayerMovement(
+            @PathVariable String roomCode,
+            @RequestParam String playerName,
+            @RequestParam boolean arriba,
+            @RequestParam boolean abajo,
+            @RequestParam boolean izquierda,
+            @RequestParam boolean derecha) {
+
+        gameRoomService.updatePlayerInput(roomCode, playerName, arriba, abajo, izquierda, derecha);
+        gameRoomService.updateGame(roomCode); // Actualiza posición inmediatamente (o podrías dejarlo al loop)
+        GameRoom updatedRoom = gameRoomService.getRoomByCode(roomCode);
+        return GameRoomMapper.toDTO(updatedRoom);
+    }
+
 }
