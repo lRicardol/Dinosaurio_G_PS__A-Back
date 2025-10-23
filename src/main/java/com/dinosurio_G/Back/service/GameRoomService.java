@@ -1,5 +1,6 @@
 package com.dinosurio_G.Back.service;
 
+import com.dinosurio_G.Back.dto.PlayerHealthDTO;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.Player;
 import com.dinosurio_G.Back.repository.GameRoomRepository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class GameRoomService {
@@ -127,6 +129,15 @@ public class GameRoomService {
             }
         });
     }
+
+    public List<PlayerHealthDTO> getPlayersHealth(String roomCode) {
+        GameRoom room = getRoomByCode(roomCode);
+
+        return room.getPlayers().stream()
+                .map(p -> new PlayerHealthDTO(p.getPlayerName(), p.getHealth()))
+                .collect(Collectors.toList());
+    }
+
 
 
 }

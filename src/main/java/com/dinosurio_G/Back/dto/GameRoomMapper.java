@@ -10,7 +10,15 @@ public class GameRoomMapper {
 
     public static GameRoomDTO toDTO(GameRoom room) {
         List<PlayerDTO> players = room.getPlayers().stream()
-                .map(p -> new PlayerDTO(p.getId(), p.getPlayerName(), p.isReady(), p.isHost()))
+                .map(p -> new PlayerDTO(
+                        p.getId(),
+                        p.getPlayerName(),
+                        p.isReady(),
+                        p.isHost(),
+                        p.getX(),
+                        p.getY(),
+                        p.getHealth()
+                ))
                 .collect(Collectors.toList());
 
         return new GameRoomDTO(
@@ -22,4 +30,5 @@ public class GameRoomMapper {
                 players
         );
     }
+
 }

@@ -17,6 +17,10 @@ public class Player {
     private int y;
     private int speed;
     private int health;
+    private static final int DEFAULT_HEALTH = 100;
+    private static final int DEFAULT_SPEED = 5;
+
+    @Transient
     private boolean arriba, abajo, izquierda, derecha;
 
     @ManyToOne
@@ -30,8 +34,8 @@ public class Player {
         this.host = host;
         this.x = x;
         this.y = y;
-        this.speed = 5;
-        this.health = 100;
+        this.speed = DEFAULT_SPEED;
+        this.health = DEFAULT_HEALTH;
     }
 
     public void setInput(boolean arriba, boolean abajo, boolean izquierda, boolean derecha) {

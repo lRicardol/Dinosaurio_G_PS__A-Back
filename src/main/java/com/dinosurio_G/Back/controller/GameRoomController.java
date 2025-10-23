@@ -3,6 +3,7 @@ package com.dinosurio_G.Back.controller;
 import com.dinosurio_G.Back.dto.CreateRoomRequest;
 import com.dinosurio_G.Back.dto.GameRoomDTO;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
+import com.dinosurio_G.Back.dto.PlayerHealthDTO;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.Player;
 import com.dinosurio_G.Back.service.GameRoomService;
@@ -89,5 +90,11 @@ public class GameRoomController {
         GameRoom updatedRoom = gameRoomService.getRoomByCode(roomCode);
         return GameRoomMapper.toDTO(updatedRoom);
     }
+
+    @GetMapping("/{roomCode}/health")
+    public List<PlayerHealthDTO> getPlayersHealth(@PathVariable String roomCode) {
+        return gameRoomService.getPlayersHealth(roomCode);
+    }
+
 
 }
