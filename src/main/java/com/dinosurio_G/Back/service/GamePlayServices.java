@@ -31,6 +31,9 @@ public class GamePlayServices {
     @Autowired
     private ChestService chestService;
 
+    @Autowired
+    private NPCManager npcManager;
+
     public void updatePlayerInput(String roomCode, String playerName,
                                   boolean arriba, boolean abajo,
                                   boolean izquierda, boolean derecha) {
@@ -43,8 +46,6 @@ public class GamePlayServices {
                     player.setInput(arriba, abajo, izquierda, derecha);
                 });
     }
-
-
 
     // Loop global del juego (cada 50 ms)
     @Scheduled(fixedRate = 50)
@@ -114,6 +115,10 @@ public class GamePlayServices {
             player.setX(spawnPos.getX());
             player.setY(spawnPos.getY());
             playerRepository.save(player);
+        }
+        // Spawn inicial de NPCs
+        if (room != null) {
+            npcManager.spawnInitialNpcs(room.getRoomCode());
         }
     }
 
