@@ -37,18 +37,17 @@ public class NPCManager {
 
     private final GameRoomRepository gameRoomRepository;
     private final PlayerRepository playerRepository;
-    private final GamePlayServices gamePlayServices;
     private final LockManager lockManager;
-
+    private final ExperienceService experienceService;
 
     @Autowired
     public NPCManager(GameRoomRepository gameRoomRepository,
                       PlayerRepository playerRepository,
-                      GamePlayServices gamePlayServices,
+                      ExperienceService experienceService,
                       LockManager lockManager) {
         this.gameRoomRepository = gameRoomRepository;
         this.playerRepository = playerRepository;
-        this.gamePlayServices = gamePlayServices;
+        this.experienceService = experienceService;
         this.lockManager = lockManager;
     }
 
@@ -145,7 +144,7 @@ public class NPCManager {
                         // protección por sala para que no se duplique
                         lockManager.withLock("room_" + roomCode, () -> {
                             // Atribuir 100 XP al room (GamePlayServices) y opcionalmente al jugador
-                            gamePlayServices.addExperience(roomCode, XP_PER_KILL);
+                            experienceService.addExperience(roomCode, XP_PER_KILL);
                         });
                     }
                     toRemove.add(npc);

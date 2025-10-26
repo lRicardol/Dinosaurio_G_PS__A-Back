@@ -31,8 +31,6 @@ public class GamePlayServices {
     @Autowired
     private ChestService chestService;
 
-    @Autowired
-    private NPCManager npcManager;
 
     public void updatePlayerInput(String roomCode, String playerName,
                                   boolean arriba, boolean abajo,
@@ -107,7 +105,7 @@ public class GamePlayServices {
         System.out.println("¡La partida de la sala " + roomCode + " se ha ganado!");
     }
 
-    public void spawnPlayers(GameRoom room, GameMap map) {
+    public void spawnPlayers(GameRoom room, GameMap map, NPCManager npcManager) {
         List<Player> players = room.getPlayers();
         for (int i = 0; i < players.size(); i++) {
             Player player = players.get(i);
@@ -117,9 +115,7 @@ public class GamePlayServices {
             playerRepository.save(player);
         }
         // Spawn inicial de NPCs
-        if (room != null) {
-            npcManager.spawnInitialNpcs(room.getRoomCode());
-        }
+        npcManager.spawnInitialNpcs(room.getRoomCode());
     }
 
     // Obtener sala en memoria
