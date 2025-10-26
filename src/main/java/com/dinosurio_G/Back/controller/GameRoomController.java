@@ -11,7 +11,9 @@ import com.dinosurio_G.Back.service.PlayerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -76,25 +78,6 @@ public class GameRoomController {
         gameRoomService.deleteRoom(roomCode);
     }
 
-    @PutMapping("/{roomCode}/move")
-    public GameRoomDTO updatePlayerMovement(
-            @PathVariable String roomCode,
-            @RequestParam String playerName,
-            @RequestParam boolean arriba,
-            @RequestParam boolean abajo,
-            @RequestParam boolean izquierda,
-            @RequestParam boolean derecha) {
-
-        gameRoomService.updatePlayerInput(roomCode, playerName, arriba, abajo, izquierda, derecha);
-        gameRoomService.updateGame(roomCode); // Actualiza posición inmediatamente (o podrías dejarlo al loop)
-        GameRoom updatedRoom = gameRoomService.getRoomByCode(roomCode);
-        return GameRoomMapper.toDTO(updatedRoom);
-    }
-
-    @GetMapping("/{roomCode}/health")
-    public List<PlayerHealthDTO> getPlayersHealth(@PathVariable String roomCode) {
-        return gameRoomService.getPlayersHealth(roomCode);
-    }
 
 
 }

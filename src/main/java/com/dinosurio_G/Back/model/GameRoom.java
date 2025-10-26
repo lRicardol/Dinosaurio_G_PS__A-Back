@@ -17,6 +17,10 @@ public class GameRoom {
     private boolean gameStarted = false;
     private int maxPlayers = 4;
 
+    @ManyToOne
+    @JoinColumn(name = "map_id")
+    private GameMap map;
+
     @OneToMany(mappedBy = "gameRoom", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<Player> players = new ArrayList<>();
 
@@ -73,6 +77,9 @@ public class GameRoom {
         return players;
     }
 
+    public void setPlayers(List<Player> players) {
+        this.players = players;
+    }
     // ----- Métodos auxiliares -----
     public void addPlayer(Player player) {
         players.add(player);
@@ -82,5 +89,12 @@ public class GameRoom {
     public void removePlayer(Player player) {
         players.remove(player);
         player.setGameRoom(null);
+    }
+
+    public GameMap getMap() {
+        return map;
+    }
+
+    public void setMap(GameMap defaultMap) {this.map=map;
     }
 }

@@ -31,8 +31,7 @@ public class Chest {
     protected Chest() {
     }
 
-    public Chest(String type, String contents, Position position) {
-        this.type = type;
+    public Chest(String contents, Position position) {
         this.contents = contents;
         this.position = position;
         this.generatedAt = LocalDateTime.now();

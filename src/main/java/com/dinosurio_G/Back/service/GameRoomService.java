@@ -1,10 +1,13 @@
 package com.dinosurio_G.Back.service;
 
 import com.dinosurio_G.Back.dto.PlayerHealthDTO;
+import com.dinosurio_G.Back.model.GameMap;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.Player;
+import com.dinosurio_G.Back.model.Position;
 import com.dinosurio_G.Back.repository.GameRoomRepository;
 import com.dinosurio_G.Back.repository.PlayerRepository;
+import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -23,6 +26,12 @@ public class GameRoomService {
     @Autowired
     private PlayerRepository playerRepository;
 
+    @Autowired
+    private GamePlayServices gamePlayServices;
+
+    @Autowired
+    private GameMapService gameMapService;
+
     // Crear una nueva sala
     public GameRoom createRoom(String roomName, int maxPlayers, String hostName) {
         GameRoom room = new GameRoom();
@@ -39,8 +48,11 @@ public class GameRoomService {
         host.setHost(true);
         host.setReady(false);
         host.setGameRoom(savedRoom);
+        host.setHealth(Player.DEFAULT_HEALTH);
+        host.setSpeed(Player.DEFAULT_SPEED);
         playerRepository.save(host);
-
+        savedRoom.getPlayers().add(host);
+        gameRoomRepository.save(savedRoom);
         return savedRoom;
     }
 
@@ -71,7 +83,11 @@ public class GameRoomService {
         player.setReady(false);
         player.setHost(false);
         player.setGameRoom(room);
+        room.getPlayers().add(player);
+        player.setHealth(Player.DEFAULT_HEALTH);
+        player.setSpeed(Player.DEFAULT_SPEED);
         playerRepository.save(player);
+        gameRoomRepository.save(room);
 
         return room;
     }
@@ -85,7 +101,9 @@ public class GameRoomService {
             throw new RuntimeException("No todos los jugadores están listos");
         }
 
+
         room.setGameStarted(true);
+
         return gameRoomRepository.save(room);
     }
 
@@ -94,49 +112,7 @@ public class GameRoomService {
         GameRoom room = getRoomByCode(roomCode);
         gameRoomRepository.delete(room);
     }
-    //Recibir input del jugador
-    public void updatePlayerInput(String roomCode, String playerName,
-                                  boolean arriba, boolean abajo,
-                                  boolean izquierda, boolean derecha) {
-        GameRoom room = getRoomByCode(roomCode);
-        Optional<Player> playerOpt = room.getPlayers().stream()
-                .filter(p -> p.getPlayerName().equals(playerName))
-                .findFirst();
 
-        if (playerOpt.isPresent()) {
-            Player player = playerOpt.get();
-            player.setInput(arriba, abajo, izquierda, derecha);
-            playerRepository.save(player);
-        } else {
-            throw new RuntimeException("Jugador no encontrado en la sala");
-        }
-    }
-
-    // Actualizar posiciones de todos los jugadores
-    public void updateGame(String roomCode) {
-        GameRoom room = getRoomByCode(roomCode);
-        room.getPlayers().forEach(player -> {
-            player.actualizar();
-            playerRepository.save(player);
-        });
-    }
-
-    @Scheduled(fixedRate = 50) // Cada 50 ms
-    public void updateAllRooms() {
-        gameRoomRepository.findAll().forEach(room -> {
-            if (room.isGameStarted()) {
-                updateGame(room.getRoomCode());
-            }
-        });
-    }
-
-    public List<PlayerHealthDTO> getPlayersHealth(String roomCode) {
-        GameRoom room = getRoomByCode(roomCode);
-
-        return room.getPlayers().stream()
-                .map(p -> new PlayerHealthDTO(p.getPlayerName(), p.getHealth()))
-                .collect(Collectors.toList());
-    }
 
 
 

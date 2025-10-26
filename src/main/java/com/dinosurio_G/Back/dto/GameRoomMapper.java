@@ -14,10 +14,7 @@ public class GameRoomMapper {
                         p.getId(),
                         p.getPlayerName(),
                         p.isReady(),
-                        p.isHost(),
-                        p.getX(),
-                        p.getY(),
-                        p.getHealth()
+                        p.isHost()
                 ))
                 .collect(Collectors.toList());
 

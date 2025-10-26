@@ -6,20 +6,16 @@ public class PlayerDTO {
     private String playerName;
     private boolean ready;
     private boolean host;
-    private int x;
-    private int y;
-    private int health;
+
 
     public PlayerDTO() {}
 
-    public PlayerDTO(Long id, String playerName, boolean ready, boolean host, int x, int y, int health) {
+    public PlayerDTO(Long id, String playerName, boolean ready, boolean host) {
         this.id = id;
         this.playerName = playerName;
         this.ready = ready;
         this.host = host;
-        this.x = x;
-        this.y = y;
-        this.health = health;
+
     }
 
     // Getters y Setters
@@ -35,10 +31,6 @@ public class PlayerDTO {
     public boolean isHost() { return host; }
     public void setHost(boolean host) { this.host = host; }
 
-    public int getX() { return x; }
-    public void setX(int x) { this.x = x; }
-    public int getY() { return y; }
-    public void setY(int y) { this.y = y; }
-    public int getHealth() { return health; }
-    public void setHealth(int health) { this.health = health; }
+
+
 }

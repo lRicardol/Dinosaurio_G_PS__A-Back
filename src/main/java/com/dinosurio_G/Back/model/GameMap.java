@@ -22,8 +22,8 @@ public class GameMap {
     private String shape;          // Forma: cuadrado, etc.
     private Integer size;          // Tamaño lógico o escala
 
-    private int width;
-    private int height;
+    private int width = 1000;
+    private int height = 800;
 
     @OneToMany(mappedBy = "map", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Chest> chests = new CopyOnWriteArrayList<>();
@@ -31,11 +31,9 @@ public class GameMap {
     protected GameMap() {
     }
 
-    public GameMap(String name, String shape, int width, int height, String description) {
+    public GameMap(String name, String shape, String description) {
         this.name = name;
         this.shape = shape;
-        this.width = width;
-        this.height = height;
         this.description = description;
         this.size = Math.max(width, height);
     }
