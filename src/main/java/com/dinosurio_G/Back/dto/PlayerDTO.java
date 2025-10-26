@@ -7,6 +7,7 @@ public class PlayerDTO {
     private boolean ready;
     private boolean host;
 
+
     public PlayerDTO() {}
 
     public PlayerDTO(Long id, String playerName, boolean ready, boolean host) {
@@ -14,6 +15,7 @@ public class PlayerDTO {
         this.playerName = playerName;
         this.ready = ready;
         this.host = host;
+
     }
 
     // Getters y Setters
@@ -28,4 +30,7 @@ public class PlayerDTO {
 
     public boolean isHost() { return host; }
     public void setHost(boolean host) { this.host = host; }
+
+
+
 }

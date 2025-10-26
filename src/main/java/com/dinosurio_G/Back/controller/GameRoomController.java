@@ -3,6 +3,7 @@ package com.dinosurio_G.Back.controller;
 import com.dinosurio_G.Back.dto.CreateRoomRequest;
 import com.dinosurio_G.Back.dto.GameRoomDTO;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
+import com.dinosurio_G.Back.dto.PlayerHealthDTO;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.Player;
 import com.dinosurio_G.Back.service.GameRoomService;
@@ -10,7 +11,9 @@ import com.dinosurio_G.Back.service.PlayerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -74,4 +77,7 @@ public class GameRoomController {
     public void deleteRoom(@PathVariable String roomCode) {
         gameRoomService.deleteRoom(roomCode);
     }
+
+
+
 }
