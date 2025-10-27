@@ -77,6 +77,49 @@ public class PlayerController {
         return response;
     }
 
+    //Spawnear jugadores
+    @PostMapping("/{roomCode}/spawn")
+    public Map<String, Object> spawnPlayers(@PathVariable String roomCode) {
+        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayersWithoutMap(roomCode);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("roomCode", roomCode);
+        response.put("message", "Jugadores spawneados correctamente");
+        response.put("players", spawnedPlayers);
+
+        return response;
+    }
+
+    // Añadir experiencia al room
+    @PostMapping("/{roomCode}/experience/add")
+    public Map<String, Object> addExperience(
+            @PathVariable String roomCode,
+            @RequestParam int amount) {
+
+        gamePlayServices.addExperience(roomCode, amount);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("roomCode", roomCode);
+        response.put("addedXP", amount);
+        response.put("progress", gamePlayServices.getProgress(roomCode));
+        response.put("message", "Experiencia añadida correctamente");
+
+        return response;
+    }
+
+    // Obtener progreso de XP del room
+    @GetMapping("/{roomCode}/experience/progress")
+    public Map<String, Object> getExperienceProgress(@PathVariable String roomCode) {
+        double progress = gamePlayServices.getProgress(roomCode);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("roomCode", roomCode);
+        response.put("progress", progress);
+        response.put("percentage", progress * 100);
+        return response;
+    }
+
+
     @GetMapping("/{roomCode}/npcs")
     public Map<String, Object> getNpcPositions(@PathVariable String roomCode) {
         List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
