@@ -22,6 +22,7 @@ public class PlayerService {
         this.gameRoomRepository = gameRoomRepository;
     }
 
+
     // CRUD básico
     public List<Player> getAllPlayers() {
         return playerRepository.findAll();
@@ -35,7 +36,13 @@ public class PlayerService {
         return playerRepository.save(player);
     }
 
+    // Verificar si ya existe un jugador con ese nombre
+    public boolean existsByPlayerName(String playerName) {
+        return playerRepository.findByPlayerName(playerName).isPresent();
+    }
+
     public void deletePlayer(Long id) {
+
         playerRepository.deleteById(id);
     }
 

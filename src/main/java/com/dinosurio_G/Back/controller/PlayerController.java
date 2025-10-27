@@ -2,6 +2,7 @@ package com.dinosurio_G.Back.controller;
 
 import com.dinosurio_G.Back.dto.GameRoomDTO;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
+import com.dinosurio_G.Back.dto.PlayerDTO;
 import com.dinosurio_G.Back.dto.PlayerHealthDTO;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.NPC;
@@ -11,7 +12,9 @@ import com.dinosurio_G.Back.service.GameRoomService;
 import com.dinosurio_G.Back.service.NPCManager;
 import com.dinosurio_G.Back.service.PlayerService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +23,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/players")
-@CrossOrigin(origins = "*")
 public class PlayerController {
     @Autowired
     private GameRoomService gameRoomService;
@@ -33,6 +35,46 @@ public class PlayerController {
 
     @Autowired
     private NPCManager npcManager;
+
+    @PostMapping("/create")
+    public PlayerDTO createPlayer(@RequestBody Map<String, String> payload) {
+        String playerName = payload.get("playerName");
+
+        // Verificar si el nombre ya existe
+        if (playerService.existsByPlayerName(playerName)) {
+            throw new RuntimeException("El nombre de jugador '" + playerName + "' ya está en uso");
+        }
+
+        // Crear un nuevo jugador limpio
+        Player newPlayer = new Player();
+        newPlayer.setPlayerName(playerName);
+        newPlayer.setReady(false);
+        newPlayer.setHost(false);
+
+        Player savedPlayer = playerService.savePlayer(newPlayer);
+
+        return new PlayerDTO(
+                savedPlayer.getId(),
+                savedPlayer.getPlayerName(),
+                savedPlayer.isReady(),
+                savedPlayer.isHost()
+        );
+    }
+
+    @DeleteMapping("/{id}")
+    public void deletePlayer(@PathVariable Long id) {
+        playerService.deletePlayer(id);
+    }
+
+
+    @GetMapping("/all")
+    public List<PlayerDTO> getAllPlayers() {
+        return playerService.getAllPlayers()
+                .stream()
+                .map(p -> new PlayerDTO(p.getId(), p.getPlayerName(), p.isReady(), p.isHost()))
+                .collect(Collectors.toList());
+    }
+
     // Marcar jugador como listo
     @PutMapping("/{roomCode}/ready")
     public GameRoomDTO toggleReady(@PathVariable String roomCode, @RequestParam String playerName) {
@@ -78,17 +120,17 @@ public class PlayerController {
     }
 
     //Spawnear jugadores
-    @PostMapping("/{roomCode}/spawn")
-    public Map<String, Object> spawnPlayers(@PathVariable String roomCode) {
-        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayersWithoutMap(roomCode);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("roomCode", roomCode);
-        response.put("message", "Jugadores spawneados correctamente");
-        response.put("players", spawnedPlayers);
-
-        return response;
-    }
+//    @PostMapping("/{roomCode}/spawn")
+//    public Map<String, Object> spawnPlayers(@PathVariable String roomCode) {
+//        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayersWithoutMap(roomCode);
+//
+//        Map<String, Object> response = new HashMap<>();
+//        response.put("roomCode", roomCode);
+//        response.put("message", "Jugadores spawneados correctamente");
+//        response.put("players", spawnedPlayers);
+//
+//        return response;
+//    }
 
     // Añadir experiencia al room
     @PostMapping("/{roomCode}/experience/add")

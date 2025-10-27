@@ -13,7 +13,8 @@ Este servicio está construido con **Spring Boot (Java 17+)**, siguiendo el patr
 
 Implementar la **API REST** y los **servicios WebSocket** necesarios para soportar:
 - Creación y gestión de partidas (modo multijugador y en tiempo real).
-- Control de sesiones y jugadores conectados.
+- Control de sesio
+- nes y jugadores conectados.
 - Sincronización de eventos dentro del mapa del juego.
 - Persistencia de datos de usuarios, estadísticas y progresos.
 - Comunicación fluida con el frontend [`Dinosaurio_G_PS__A-From`](https://github.com/...).
