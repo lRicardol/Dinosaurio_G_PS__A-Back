@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,19 +72,6 @@ public class GamePlayServices {
                 .orElseThrow(() -> new RuntimeException("La sala con código " + roomCode + " no existe"));
     }
 
-    public Position calculateSpawnPosition(GameMap map, int playerIndex) {
-        double centerX = map.getWidth() / 2.0;
-        double centerY = map.getHeight() / 2.0;
-        double offset = 60.0;
-
-        double x = centerX + (playerIndex * offset);
-        double y = centerY;
-
-        // Evitamos salirse del mapa
-        x = Math.max(0, Math.min(map.getWidth(), x));
-
-        return new Position(x, y);
-    }
 
     // Sumar XP al room
     public void addExperience(String roomCode, int amount) {
@@ -106,16 +94,34 @@ public class GamePlayServices {
         System.out.println("¡La partida de la sala " + roomCode + " se ha ganado!");
     }
 
-    public void spawnPlayers(GameRoom room, GameMap map) {
+    public List<Map<String, Object>> spawnPlayersWithoutMap(String roomCode) {
+        GameRoom room = getRoomByCode(roomCode);
         List<Player> players = room.getPlayers();
+
+        double startX = 100; // posición inicial base
+        double startY = 100;
+        double offset = 80; // distancia entre jugadores
+
         for (int i = 0; i < players.size(); i++) {
             Player player = players.get(i);
-            Position spawnPos = calculateSpawnPosition(map, i);
-            player.setX(spawnPos.getX());
-            player.setY(spawnPos.getY());
+            player.setX(startX + (i * offset));
+            player.setY(startY);
             playerRepository.save(player);
         }
+
+        // Retornamos la lista con sus posiciones
+        return players.stream()
+                .map(p -> {
+                    Map<String, Object> playerData = new HashMap<>();
+                    playerData.put("name", p.getPlayerName());
+                    playerData.put("x", p.getX());
+                    playerData.put("y", p.getY());
+                    return playerData;
+                })
+                .collect(Collectors.toList());
     }
+
+
 
     // Obtener sala en memoria
     public GameRoom getRoomInMemory(String roomCode) {
