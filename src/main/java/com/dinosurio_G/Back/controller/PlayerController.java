@@ -42,8 +42,9 @@ public class PlayerController {
 
         // Verificar si el nombre ya existe
         if (playerService.existsByPlayerName(playerName)) {
-            throw new RuntimeException("El nombre de jugador '" + playerName + "' ya está en uso");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre ya está en uso");
         }
+
 
         // Crear un nuevo jugador limpio
         Player newPlayer = new Player();
