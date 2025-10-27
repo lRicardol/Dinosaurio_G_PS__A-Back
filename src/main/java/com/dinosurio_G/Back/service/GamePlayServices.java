@@ -32,6 +32,7 @@ public class GamePlayServices {
     @Autowired
     private ChestService chestService;
 
+
     public void updatePlayerInput(String roomCode, String playerName,
                                   boolean arriba, boolean abajo,
                                   boolean izquierda, boolean derecha) {
@@ -44,8 +45,6 @@ public class GamePlayServices {
                     player.setInput(arriba, abajo, izquierda, derecha);
                 });
     }
-
-
 
     // Loop global del juego (cada 50 ms)
     @Scheduled(fixedRate = 50)
@@ -96,6 +95,7 @@ public class GamePlayServices {
 
     public List<Map<String, Object>> spawnPlayersWithoutMap(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
+    public void spawnPlayers(GameRoom room, GameMap map, NPCManager npcManager) {
         List<Player> players = room.getPlayers();
 
         double startX = 100; // posición inicial base
@@ -119,6 +119,8 @@ public class GamePlayServices {
                     return playerData;
                 })
                 .collect(Collectors.toList());
+        // Spawn inicial de NPCs
+        npcManager.spawnInitialNpcs(room.getRoomCode());
     }
 
 

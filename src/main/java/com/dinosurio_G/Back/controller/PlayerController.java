@@ -4,9 +4,11 @@ import com.dinosurio_G.Back.dto.GameRoomDTO;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
 import com.dinosurio_G.Back.dto.PlayerHealthDTO;
 import com.dinosurio_G.Back.model.GameRoom;
+import com.dinosurio_G.Back.model.NPC;
 import com.dinosurio_G.Back.model.Player;
 import com.dinosurio_G.Back.service.GamePlayServices;
 import com.dinosurio_G.Back.service.GameRoomService;
+import com.dinosurio_G.Back.service.NPCManager;
 import com.dinosurio_G.Back.service.PlayerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +31,8 @@ public class PlayerController {
     @Autowired
     private GamePlayServices gamePlayServices;
 
+    @Autowired
+    private NPCManager npcManager;
     // Marcar jugador como listo
     @PutMapping("/{roomCode}/ready")
     public GameRoomDTO toggleReady(@PathVariable String roomCode, @RequestParam String playerName) {
@@ -116,4 +120,16 @@ public class PlayerController {
     }
 
 
+    @GetMapping("/{roomCode}/npcs")
+    public Map<String, Object> getNpcPositions(@PathVariable String roomCode) {
+        List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
+        Map<String, Object> response = new HashMap<>();
+        response.put("npcs", npcs.stream().map(n -> Map.of(
+                "id", n.getId(),
+                "x", n.getX(),
+                "y", n.getY(),
+                "health", n.getHealth()
+        )).collect(Collectors.toList()));
+        return response;
+    }
 }
