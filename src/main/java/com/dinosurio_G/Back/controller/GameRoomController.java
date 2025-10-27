@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/rooms")
-@CrossOrigin(origins = "*") // Permite conexiones desde el front
 public class GameRoomController {
 
     @Autowired

@@ -8,4 +8,5 @@ import java.util.Optional;
 
 public interface PlayerRepository extends JpaRepository<Player, Long> {
     Optional<Player> findByPlayerNameAndGameRoom(String playerName, GameRoom gameRoom);
+    Optional<Player> findByPlayerName(String playerName);
 }

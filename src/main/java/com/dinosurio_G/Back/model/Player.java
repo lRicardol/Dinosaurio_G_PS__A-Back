@@ -9,6 +9,7 @@ public class Player {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
+    @Column(unique = true)
     private String playerName;
     private boolean ready = false;
     private boolean host = false;
@@ -29,9 +30,8 @@ public class Player {
     private double y; // posición en Y
 
 
-
-    @ManyToOne
-    @JoinColumn(name = "game_room_id")
+    @ManyToOne(optional = true)
+    @JoinColumn(name = "game_room_id", nullable = true)
     private GameRoom gameRoom;
 
     public Player() {
