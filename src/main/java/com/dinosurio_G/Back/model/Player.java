@@ -19,7 +19,9 @@ public class Player {
     private int health;
     public static final int DEFAULT_HEALTH = 100;
     public static final double DEFAULT_SPEED = 5;
+    @Transient
     private long lastAttackTime = 0;
+    @Transient
     private boolean facingRight = true;
 
     @Transient
