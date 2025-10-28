@@ -32,6 +32,8 @@ public class GamePlayServices {
     @Autowired
     private ChestService chestService;
 
+    @Autowired
+    private NPCManager npcManager;
 
     public void updatePlayerInput(String roomCode, String playerName,
                                   boolean arriba, boolean abajo,
@@ -93,37 +95,34 @@ public class GamePlayServices {
         System.out.println("¡La partida de la sala " + roomCode + " se ha ganado!");
     }
 
-//    public List<Map<String, Object>> spawnPlayersWithoutMap(String roomCode) {
-//        GameRoom room = getRoomByCode(roomCode);
-//        return null;
-//    }
-//    public void spawnPlayers(GameRoom room, GameMap map, NPCManager npcManager) {
-//        List<Player> players = room.getPlayers();
-//
-//        double startX = 100; // posición inicial base
-//        double startY = 100;
-//        double offset = 80; // distancia entre jugadores
-//
-//        for (int i = 0; i < players.size(); i++) {
-//            Player player = players.get(i);
-//            player.setX(startX + (i * offset));
-//            player.setY(startY);
-//            playerRepository.save(player);
-//        }
-//
-//        // Retornamos la lista con sus posiciones
-//        return players.stream()
-//                .map(p -> {
-//                    Map<String, Object> playerData = new HashMap<>();
-//                    playerData.put("name", p.getPlayerName());
-//                    playerData.put("x", p.getX());
-//                    playerData.put("y", p.getY());
-//                    return playerData;
-//                })
-//                .collect(Collectors.toList());
-//        // Spawn inicial de NPCs
-//        npcManager.spawnInitialNpcs(room.getRoomCode());
-//    }
+    public List<Map<String, Object>> spawnPlayers(GameRoom room) {
+        List<Player> players = room.getPlayers();
+
+        double startX = 100;
+        double startY = 100;
+        double offset = 80;
+
+        for (int i = 0; i < players.size(); i++) {
+            Player player = players.get(i);
+            player.setX(startX + (i * offset));
+            player.setY(startY);
+            playerRepository.save(player);
+        }
+
+        // Spawnear NPCs al final
+        npcManager.spawnInitialNpcs(room.getRoomCode());
+
+        // Retornar posiciones
+        return players.stream()
+                .map(p -> {
+                    Map<String, Object> playerData = new HashMap<>();
+                    playerData.put("name", p.getPlayerName());
+                    playerData.put("x", p.getX());
+                    playerData.put("y", p.getY());
+                    return playerData;
+                })
+                .collect(Collectors.toList());
+    }
 
 
 
