@@ -9,6 +9,7 @@ import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +53,7 @@ public class GamePlayServices {
     }
 
     // Loop global del juego (cada 50 ms)
+    @Transactional
     @Scheduled(fixedRate = 50)
     public void updateAllRooms() {
         gameRoomRepository.findAll().forEach(room -> {
