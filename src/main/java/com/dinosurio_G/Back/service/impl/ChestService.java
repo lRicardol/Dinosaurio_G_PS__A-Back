@@ -38,4 +38,19 @@ public class ChestService implements IChestService {
     public void deleteById(Long id) {
         chestRepository.deleteById(id);
     }
+
+    @Transactional
+    public boolean tryOpenChest(Long chestId) {
+        // Buscar el cofre actualizado desde BD
+        Chest chest = chestRepository.findById(chestId).orElse(null);
+        if (chest == null || !chest.isActive()) {
+            return false; // ya está abierto o no existe
+        }
+
+        // Marcarlo como inactivo
+        chest.openChest();
+        chestRepository.save(chest);
+        return true; // se abrió correctamente
+    }
+
 }

@@ -19,7 +19,8 @@ public class Player {
     private int health;
     public static final int DEFAULT_HEALTH = 100;
     public static final double DEFAULT_SPEED = 5;
-
+    private long lastAttackTime = 0;
+    private boolean facingRight = true;
 
     @Transient
     private boolean arriba, abajo, izquierda, derecha;
@@ -56,17 +57,25 @@ public class Player {
         this.derecha = derecha;
     }
 
-    //Actualizar posicion del jugador
+    // Actualizar posición del jugador
     public synchronized void actualizar() {
         if (gameRoom == null || gameRoom.getMap() == null) return;
 
         double newX = x;
         double newY = y;
 
+        // Actualizar posición
         if (arriba && !abajo) newY -= speed;
         if (abajo && !arriba) newY += speed;
-        if (izquierda && !derecha) newX -= speed;
-        if (derecha && !izquierda) newX += speed;
+
+        if (izquierda && !derecha) {
+            newX -= speed;
+            facingRight = false; // Si se mueve a la izquierda, mira a la izquierda
+        }
+        if (derecha && !izquierda) {
+            newX += speed;
+            facingRight = true;  // Si se mueve a la derecha, mira a la derecha
+        }
 
         // Limitar dentro del mapa
         GameMap map = gameRoom.getMap();
@@ -77,7 +86,16 @@ public class Player {
         y = newY;
     }
 
-
+// Tiempo de ataque
+    public boolean canAttack() {
+        long now = System.currentTimeMillis();
+        long attackCooldownMs = 1500; //Tiempo de ataque en milisegundos
+        if (now - lastAttackTime >= attackCooldownMs) {
+            lastAttackTime = now;
+            return true;
+        }
+        return false;
+    }
 
     //Recibir daño
     public synchronized void receiveDamage(int damage) {
@@ -89,6 +107,10 @@ public class Player {
             this.health = 0;
             onDeath();
         }
+    }
+
+    public boolean isFacingRight() {
+        return facingRight;
     }
 
     /**

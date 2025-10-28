@@ -8,12 +8,15 @@ import com.dinosurio_G.Back.model.GameMap;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.NPC;
 import com.dinosurio_G.Back.model.Player;
+import com.dinosurio_G.Back.repository.GameRoomRepository;
 import com.dinosurio_G.Back.service.GamePlayServices;
 import com.dinosurio_G.Back.service.GameRoomService;
 import com.dinosurio_G.Back.service.NPCManager;
 import com.dinosurio_G.Back.service.PlayerService;
+import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -36,6 +39,12 @@ public class PlayerController {
 
     @Autowired
     private NPCManager npcManager;
+
+    @Autowired
+    private GameRoomRepository gameRoomRepository;
+
+    @Autowired
+    private GameMapService gameMapService;
 
     @PostMapping("/create")
     public PlayerDTO createPlayer(@RequestBody Map<String, String> payload) {
@@ -121,18 +130,20 @@ public class PlayerController {
         return response;
     }
 
-//    // Spawnear jugadores
-//    @PostMapping("/{roomCode}/spawn")
-//    public Map<String, Object> spawnPlayers(@PathVariable String roomCode) {
-//        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayers(roomCode);
-//
-//        Map<String, Object> response = new HashMap<>();
-//        response.put("roomCode", roomCode);
-//        response.put("message", "Jugadores spawneados correctamente");
-//        response.put("players", spawnedPlayers);
-//
-//        return response;
-//    }
+    // Spawnear jugadores
+    @PostMapping("/{roomCode}/spawn")
+    public ResponseEntity<Map<String, Object>> spawnPlayers(@PathVariable String roomCode) {
+        // Llamar al servicio para spawnear jugadores + NPCs
+        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayers(roomCode);
+
+        // Preparar respuesta
+        Map<String, Object> response = new HashMap<>();
+        response.put("roomCode", roomCode);
+        response.put("message", "Jugadores y NPCs spawneados correctamente");
+        response.put("players", spawnedPlayers);
+
+        return ResponseEntity.ok(response);
+    }
 
     // Añadir experiencia al room
     @PostMapping("/{roomCode}/experience/add")
