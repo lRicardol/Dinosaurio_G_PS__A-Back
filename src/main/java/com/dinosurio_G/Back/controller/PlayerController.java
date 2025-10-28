@@ -4,6 +4,7 @@ import com.dinosurio_G.Back.dto.GameRoomDTO;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
 import com.dinosurio_G.Back.dto.PlayerDTO;
 import com.dinosurio_G.Back.dto.PlayerHealthDTO;
+import com.dinosurio_G.Back.model.GameMap;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.NPC;
 import com.dinosurio_G.Back.model.Player;
@@ -120,10 +121,10 @@ public class PlayerController {
         return response;
     }
 
-    //Spawnear jugadores
+//    // Spawnear jugadores
 //    @PostMapping("/{roomCode}/spawn")
 //    public Map<String, Object> spawnPlayers(@PathVariable String roomCode) {
-//        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayersWithoutMap(roomCode);
+//        List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayers(roomCode);
 //
 //        Map<String, Object> response = new HashMap<>();
 //        response.put("roomCode", roomCode);
