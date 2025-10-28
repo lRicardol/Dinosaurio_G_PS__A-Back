@@ -208,7 +208,8 @@ public class GamePlayServices {
             double distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance <= CHEST_INTERACT_RADIUS) {
-                // Sincronizar por ID de cofre
+
+                //  Sincronizar por ID de cofre
                 synchronized (("CHEST_LOCK_" + chest.getId()).intern()) {
                     if (!chest.isActive()) continue;
 
@@ -217,7 +218,8 @@ public class GamePlayServices {
                         int rewardXp = 150; // o leerlo del chest.getContents()
                         addExperience(roomCode, rewardXp);
 
-                        System.out.println(player.getPlayerName() +
+
+                        System.out.println( player.getPlayerName() +
                                 " abrió cofre " + chest.getId() +
                                 " y ganó " + rewardXp + " XP");
                     }

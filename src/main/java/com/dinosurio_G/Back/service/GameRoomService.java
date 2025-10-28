@@ -110,18 +110,9 @@ public class GameRoomService {
     }
 
 
-
-
-
     // Iniciar juego (solo host)
     public GameRoom startGame(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
-        boolean allReady = room.getPlayers().stream().allMatch(Player::isReady);
-
-        if (!allReady) {
-            throw new RuntimeException("No todos los jugadores están listos");
-        }
-
 
         room.setGameStarted(true);
 
