@@ -10,4 +10,5 @@ public interface IChestService {
     Optional<Chest> findById(Long id);
     List<Chest> findAll();
     void deleteById(Long id);
+    public List<Chest> findByMapId(Long mapId);
 }

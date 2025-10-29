@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.Random;
 
 @Service
 @Transactional
@@ -19,6 +20,7 @@ public class GameMapService implements IGameMapService {
     private final GameMapRepository gameMapRepository;
     private final LockManager lockManager;
     private final AsyncExecutor asyncExecutor;
+    private final Random random = new Random();
 
     public GameMapService(GameMapRepository gameMapRepository,
                           LockManager lockManager,
@@ -48,23 +50,28 @@ public class GameMapService implements IGameMapService {
         gameMapRepository.deleteById(id);
     }
 
-    /**
-     * Ejecuta una acción crítica sobre un mapa con bloqueo controlado.
-     */
     @Override
     public void updateSafely(Long mapId, Runnable updateAction) {
         lockManager.withLock("map_" + mapId, () -> {
             updateAction.run();
-            // Persistir cambios tras actualización
             gameMapRepository.findById(mapId).ifPresent(gameMapRepository::save);
         });
     }
 
-    /**
-     * Ejecuta una acción concurrente de forma asíncrona (no bloqueante).
-     */
     @Override
     public CompletableFuture<Void> updateAsync(Long mapId, Runnable asyncUpdateAction) {
         return asyncExecutor.runAsync(() -> updateSafely(mapId, asyncUpdateAction));
+    }
+
+    /**
+     * Crea un mapa nuevo básico (posiciones y cofres vacíos) para una sala.
+     * Ajusta parámetros según tu lógica de mapas.
+     */
+    @Override
+    public GameMap createMapForRoom() {
+        GameMap map = new GameMap("Mapa generado", "rectangle", "Mapa por defecto");
+        map.setWidth(1000);
+        map.setHeight(800);
+        return gameMapRepository.save(map);
     }
 }

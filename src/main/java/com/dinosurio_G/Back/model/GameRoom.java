@@ -21,7 +21,10 @@ public class GameRoom {
     @JoinColumn(name = "map_id")
     private GameMap map;
 
-    @OneToMany(mappedBy = "gameRoom", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "gameRoom",
+            cascade = CascadeType.ALL,
+            orphanRemoval = false,
+            fetch = FetchType.EAGER)
     private List<Player> players = new ArrayList<>();
 
     // Constructor por defecto que genera un código aleatorio

@@ -11,7 +11,7 @@ public interface IGameMapService {
     Optional<GameMap> findById(Long id);
     List<GameMap> findAll();
     void deleteById(Long id);
-
+    GameMap createMapForRoom();
     void updateSafely(Long mapId, Runnable updateAction);
     CompletableFuture<Void> updateAsync(Long mapId, Runnable asyncUpdateAction);
 }
