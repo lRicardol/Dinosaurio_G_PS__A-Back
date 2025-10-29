@@ -19,7 +19,10 @@ public class Player {
     private int health;
     public static final int DEFAULT_HEALTH = 100;
     public static final double DEFAULT_SPEED = 5;
+
+    @Transient
     private long lastAttackTime = 0;
+    @Transient
     private boolean facingRight = true;
 
     @Transient
@@ -29,7 +32,7 @@ public class Player {
 
     private double x; // posición en X
     private double y; // posición en Y
-
+    
 
     @ManyToOne(optional = true)
     @JoinColumn(name = "game_room_id", nullable = true)

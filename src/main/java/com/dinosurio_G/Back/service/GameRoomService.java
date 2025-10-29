@@ -1,22 +1,24 @@
 package com.dinosurio_G.Back.service;
 
-import com.dinosurio_G.Back.dto.PlayerHealthDTO;
 import com.dinosurio_G.Back.model.GameMap;
 import com.dinosurio_G.Back.model.GameRoom;
 import com.dinosurio_G.Back.model.Player;
-import com.dinosurio_G.Back.model.Position;
 import com.dinosurio_G.Back.repository.GameRoomRepository;
 import com.dinosurio_G.Back.repository.PlayerRepository;
 import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.dinosurio_G.Back.service.GamePlayServices;
+import com.dinosurio_G.Back.service.ExperienceService;
+import com.dinosurio_G.Back.dto.GameRoomMapper;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
+
+
 
 @Service
 public class GameRoomService {
@@ -28,52 +30,52 @@ public class GameRoomService {
     private PlayerRepository playerRepository;
 
     @Autowired
+    private GameMapService gameMapService;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
     private GamePlayServices gamePlayServices;
 
     @Autowired
-    private GameMapService gameMapService;
+    private ExperienceService experienceService;
 
     // Crear una nueva sala
     public GameRoom createRoom(String roomName, int maxPlayers, String hostName) {
-        // Buscar el jugador existente por nombre
+
         Player host = playerRepository.findByPlayerName(hostName)
                 .orElseThrow(() -> new RuntimeException("El jugador " + hostName + " no existe"));
 
-        // Crear la sala
         GameRoom room = new GameRoom();
         room.setRoomName(roomName);
         room.setMaxPlayers(maxPlayers);
         room.setRoomCode(UUID.randomUUID().toString().substring(0, 6).toUpperCase());
         room.setGameStarted(false);
 
-        // Guardar sala primero
+        // Asignar un mapa nuevo por sala
+        GameMap map = gameMapService.createMapForRoom();
+        room.setMap(map);
+
         GameRoom savedRoom = gameRoomRepository.save(room);
 
-        // Asociar el jugador existente como host
         host.setHost(true);
         host.setGameRoom(savedRoom);
-        host.setReady(false);
         playerRepository.save(host);
 
         savedRoom.getPlayers().add(host);
-        gameRoomRepository.save(savedRoom);
-
-        return savedRoom;
+        return gameRoomRepository.save(savedRoom);
     }
 
-
-    // Obtiene todas las salas
+    // Listar todas las salas
     public List<GameRoom> getAllRooms() {
         return gameRoomRepository.findAll();
     }
 
-    // Obtiene una sala por código
+    // Buscar sala por código
     public GameRoom getRoomByCode(String roomCode) {
-        Optional<GameRoom> room = gameRoomRepository.findByRoomCode(roomCode);
-        if (room.isEmpty()) {
-            throw new RuntimeException("La sala con código " + roomCode + " no existe");
-        }
-        return room.get();
+        return gameRoomRepository.findByRoomCode(roomCode)
+                .orElseThrow(() -> new RuntimeException("La sala con código " + roomCode + " no existe"));
     }
 
     @Transactional
@@ -92,31 +94,36 @@ public class GameRoomService {
         }
 
         if (!room.getPlayers().contains(player)) {
-            // Añadir a la lista de la sala
-            room.getPlayers().add(player);
-            // Establecer relación inversa
-            player.setGameRoom(room);
+            room.addPlayer(player);
             player.setHost(false);
-            player.setReady(false);
-
-            // Guardar el jugador para actualizar la columna game_room_id
             playerRepository.save(player);
-
-            // Opcional: flush para asegurar persistencia inmediata
-            gameRoomRepository.flush();
         }
 
-        return room;
+        return gameRoomRepository.save(room);
     }
 
-
-    // Iniciar juego (solo host)
+    @Transactional
     public GameRoom startGame(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
 
-        room.setGameStarted(true);
+        // 1) Reset XP antes de empezar
+        experienceService.resetRoomXp(roomCode);
 
-        return gameRoomRepository.save(room);
+        // 2) Spawn players (esto posiciona y persiste jugadores)
+        gamePlayServices.spawnPlayers(roomCode);
+
+        // 3) marcamos la sala como iniciada y persistimos
+        room.setGameStarted(true);
+        GameRoom saved = gameRoomRepository.saveAndFlush(room);
+        System.out.println("GAME STARTED? -> " + saved.isGameStarted());
+        // 4) Notificar a todos los clientes que la partida empezó
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event",
+                Map.of("type", "GAME_STARTED", "roomCode", roomCode));
+
+        // 5) Enviar estado completo inmediatamente
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/state", GameRoomMapper.toDTO(saved));
+
+        return saved;
     }
 
     // Eliminar sala

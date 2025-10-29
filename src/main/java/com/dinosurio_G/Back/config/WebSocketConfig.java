@@ -12,14 +12,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws-game") //  Endpoint WebSocket
-                .setAllowedOrigins("*")  //  Permite llamadas desde frontend
-                .withSockJS();           //  Compatibilidad SockJS
+        registry.addEndpoint("/ws-game")
+                .setAllowedOrigins("http://localhost:3000") // Frontend Next.js
+                .withSockJS();
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic"); //  Para mensajes broadcast
-        registry.setApplicationDestinationPrefixes("/app"); //  Para enviar desde el front
+        registry.enableSimpleBroker("/topic", "/queue");
+        registry.setApplicationDestinationPrefixes("/app");
     }
 }

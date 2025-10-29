@@ -39,18 +39,23 @@ public class ChestService implements IChestService {
         chestRepository.deleteById(id);
     }
 
+    /**
+     * Intenta abrir un cofre de forma transaccional. Retorna true si se abrió y se guardó.
+     */
     @Transactional
     public boolean tryOpenChest(Long chestId) {
-        // Buscar el cofre actualizado desde BD
         Chest chest = chestRepository.findById(chestId).orElse(null);
         if (chest == null || !chest.isActive()) {
-            return false; // ya está abierto o no existe
+            return false;
         }
-
-        // Marcarlo como inactivo
         chest.openChest();
         chestRepository.save(chest);
-        return true; // se abrió correctamente
+        return true;
     }
 
+
+    @Override
+    public List<Chest> findByMapId(Long mapId) {
+        return chestRepository.findByMapId(mapId);
+    }
 }

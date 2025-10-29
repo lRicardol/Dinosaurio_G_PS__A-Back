@@ -5,6 +5,7 @@ import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,15 +27,17 @@ public class GameMapController {
         this.gameMapService = gameMapService;
     }
 
-    @Async
     @GetMapping
-    public CompletableFuture<ResponseEntity<List<GameMap>>> getAllMaps() {
-        return CompletableFuture.supplyAsync(() -> {
-            List<GameMap> maps = gameMapService.findAll();
-            return maps.isEmpty()
-                    ? ResponseEntity.noContent().build()
-                    : ResponseEntity.ok(maps);
-        });
+    @Transactional  // mantiene sesión abierta
+    public ResponseEntity<List<GameMap>> getAllMaps() {
+        List<GameMap> maps = gameMapService.findAll();
+
+        // Forzar carga de colecciones lazy
+        maps.forEach(map -> map.getChests().size());
+
+        return maps.isEmpty()
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.ok(maps);
     }
 
     @Async
