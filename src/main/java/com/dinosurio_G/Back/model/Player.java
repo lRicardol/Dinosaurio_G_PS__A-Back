@@ -95,7 +95,7 @@ public class Player {
 // Tiempo de ataque
     public boolean canAttack() {
         long now = System.currentTimeMillis();
-        long attackCooldownMs = 1500; //Tiempo de ataque en milisegundos
+        long attackCooldownMs = 5000; //Tiempo de ataque en milisegundos
         if (now - lastAttackTime >= attackCooldownMs) {
             lastAttackTime = now;
             return true;

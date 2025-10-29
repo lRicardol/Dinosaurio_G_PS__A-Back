@@ -28,7 +28,7 @@ public class NPCManager {
     private static final double NPC_SPEED = 2.0;
     private static final int NPC_DAMAGE = 10;
     private static final double MELEE_RANGE = 10.0;
-    private static final int XP_PER_KILL = 100;
+    private static final int XP_PER_KILL = 50;
 
     // Distancia de spawn aumentada y delay de inicio
     private static final double MIN_DIST_FROM_PLAYERS = 250.0; // Aumentado de 140 a 250
