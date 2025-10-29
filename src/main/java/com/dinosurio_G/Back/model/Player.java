@@ -25,6 +25,7 @@ public class Player {
     @Transient
     private boolean facingRight = true;
 
+
     private boolean arriba = false;
     private boolean abajo = false;
     private boolean izquierda = false;
@@ -124,6 +125,14 @@ public class Player {
     private void onDeath() {
         System.out.println(playerName + " ha muerto.");
         // Aquí podrías resetear posición, notificar al front, etc.
+    }
+
+    public long getLastAttackTime() {
+        return lastAttackTime;
+    }
+
+    public void updateLastAttackTime() {
+        this.lastAttackTime = System.currentTimeMillis();
     }
 
     public boolean isAlive() {
