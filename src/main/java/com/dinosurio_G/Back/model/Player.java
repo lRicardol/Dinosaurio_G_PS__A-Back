@@ -25,8 +25,10 @@ public class Player {
     @Transient
     private boolean facingRight = true;
 
-    @Transient
-    private boolean arriba, abajo, izquierda, derecha;
+    private boolean arriba = false;
+    private boolean abajo = false;
+    private boolean izquierda = false;
+    private boolean derecha = false;
 
     private boolean isAlive = true;
 

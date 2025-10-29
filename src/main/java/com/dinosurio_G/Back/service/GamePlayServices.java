@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,64 +46,123 @@ public class GamePlayServices {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    // Caché de salas en memoria para mantener el estado de inputs
+    private final Map<String, GameRoom> roomCache = new ConcurrentHashMap<>();
+
     // Actualizar input del jugador (desde frontend)
     public void updatePlayerInput(String roomCode, String playerName,
                                   boolean arriba, boolean abajo,
                                   boolean izquierda, boolean derecha) {
-        GameRoom room = getRoomByCode(roomCode);
+        GameRoom room = getOrLoadRoom(roomCode);
         room.getPlayers().stream()
                 .filter(p -> p.getPlayerName().equals(playerName))
                 .findFirst()
                 .ifPresent(player -> {
                     player.setInput(arriba, abajo, izquierda, derecha);
-                    // Log para debug
-                    // System.out.println("Input recibido de " + playerName + ": " +
-                    //                  (arriba?"↑":"") + (abajo?"↓":"") +
-                    //                  (izquierda?"←":"") + (derecha?"→":""));
+                    System.out.println("✓ Input actualizado para " + playerName + ": " +
+                            (arriba?"↑":"") + (abajo?"↓":"") +
+                            (izquierda?"←":"") + (derecha?"→":""));
                 });
     }
 
-    // Loop global del juego (cada 50 ms) - ACTUALIZADO
+    // Obtener o cargar sala en caché
+    private GameRoom getOrLoadRoom(String roomCode) {
+        return roomCache.computeIfAbsent(roomCode, code -> {
+            GameRoom room = gameRoomRepository.findByRoomCode(code)
+                    .orElseThrow(() -> new RuntimeException("La sala con código " + code + " no existe"));
+            System.out.println("✓ Sala " + roomCode + " cargada en memoria");
+            return room;
+        });
+    }
+
+    // Loop global del juego (cada 50 ms) - CORREGIDO
     @Transactional
     @Scheduled(fixedRate = 50)
     public void updateAllRooms() {
-        gameRoomRepository.findAll().forEach(room -> {
+        // Recargar salas activas desde DB
+        List<GameRoom> activeRooms = gameRoomRepository.findAll().stream()
+                .filter(GameRoom::isGameStarted)
+                .collect(Collectors.toList());
+
+        // Actualizar caché con salas activas
+        activeRooms.forEach(room -> {
+            String roomCode = room.getRoomCode();
+            GameRoom cachedRoom = roomCache.get(roomCode);
+
+            if (cachedRoom != null) {
+                // Mantener inputs de la caché, actualizar resto desde DB
+                syncRoomFromDb(cachedRoom, room);
+            } else {
+                roomCache.put(roomCode, room);
+            }
+        });
+
+        // Procesar cada sala en caché
+        roomCache.values().forEach(room -> {
             if (!room.isGameStarted()) return;
 
-            // 1. Actualizar movimiento y persistir posiciones
+            // 1. Actualizar movimiento (usa inputs en memoria)
             for (Player player : room.getPlayers()) {
                 if (player.isAlive()) {
                     player.actualizar();
+                }
+            }
+
+            // 2. Persistir posiciones actualizadas
+            for (Player player : room.getPlayers()) {
+                if (player.isAlive()) {
                     playerRepository.save(player);
                 }
             }
 
-            // 2. Revisar interacción con cofres
+            // 3. Revisar interacción con cofres
             for (Player player : room.getPlayers()) {
                 if (player.isAlive()) {
                     checkChestInteraction(room, player);
                 }
             }
 
-            // 3. Ejecutar ataques automáticos por jugador
+            // 4. Ejecutar ataques automáticos por jugador
             for (Player player : room.getPlayers()) {
                 if (player.isAlive() && player.canAttack()) {
                     playerWhipAttack(room.getRoomCode(), player.getPlayerName());
                 }
             }
 
-            // 4. Verificar si la partida se ha perdido
+            // 5. Verificar si la partida se ha perdido
             checkGameOver(room.getRoomCode());
 
-            // 5. ENVIAR ESTADO ACTUALIZADO AL FRONTEND
+            // 6. Enviar estado actualizado al frontend
             broadcastGameState(room.getRoomCode());
         });
+
+        // Limpiar salas inactivas del caché
+        roomCache.entrySet().removeIf(entry -> !entry.getValue().isGameStarted());
+    }
+
+    // Sincronizar datos de DB manteniendo inputs
+    private void syncRoomFromDb(GameRoom cachedRoom, GameRoom dbRoom) {
+        // Actualizar propiedades de la sala
+        cachedRoom.setGameStarted(dbRoom.isGameStarted());
+        cachedRoom.setMap(dbRoom.getMap());
+
+        // Sincronizar jugadores manteniendo inputs
+        for (Player dbPlayer : dbRoom.getPlayers()) {
+            cachedRoom.getPlayers().stream()
+                    .filter(p -> p.getId().equals(dbPlayer.getId()))
+                    .findFirst()
+                    .ifPresent(cachedPlayer -> {
+                        // Actualizar propiedades persistidas
+                        cachedPlayer.setHealth(dbPlayer.getHealth());
+                        // NO actualizar x, y ni inputs (se mantienen en memoria)
+                    });
+        }
     }
 
     // Enviar estado del juego al frontend vía WebSocket
     private void broadcastGameState(String roomCode) {
         try {
-            GameRoom room = getRoomByCode(roomCode);
+            GameRoom room = getOrLoadRoom(roomCode);
 
             // Preparar datos de jugadores
             List<Map<String, Object>> playersData = room.getPlayers().stream()
@@ -143,28 +203,24 @@ public class GamePlayServices {
             messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/state", gameState);
 
         } catch (Exception e) {
-            System.err.println(" Error broadcasting game state: " + e.getMessage());
+            System.err.println("Error broadcasting game state: " + e.getMessage());
         }
     }
 
     // Determinar dirección del jugador
     private String determineDirection(Player player) {
-        if (player.isFacingRight()) {
-            return "right";
-        } else {
-            return "left";
-        }
+        return player.isFacingRight() ? "right" : "left";
     }
 
     // Obtener vida actual de los jugadores
     public List<PlayerHealthDTO> getPlayersHealth(String roomCode) {
-        GameRoom room = getRoomByCode(roomCode);
+        GameRoom room = getOrLoadRoom(roomCode);
         return room.getPlayers().stream()
                 .map(p -> new PlayerHealthDTO(
                         p.getPlayerName(),
                         p.getHealth(),
-                        Player.DEFAULT_HEALTH, // maxHealth
-                        p.isAlive()            // alive
+                        Player.DEFAULT_HEALTH,
+                        p.isAlive()
                 ))
                 .collect(Collectors.toList());
     }
@@ -184,17 +240,17 @@ public class GamePlayServices {
         return experienceService.getProgress(roomCode);
     }
 
-    // Spawn de jugadores + NPCs - CON VERIFICACIÓN
+    // Spawn de jugadores + NPCs
     public List<Map<String, Object>> spawnPlayers(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
         List<Player> players = room.getPlayers();
 
-        // VERIFICAR SI YA FUERON SPAWNEADOS
+        // Verificar si ya fueron spawneados
         boolean alreadySpawned = players.stream()
                 .anyMatch(p -> p.getX() != 0 || p.getY() != 0);
 
         if (alreadySpawned) {
-            System.out.println(" Jugadores ya spawneados en sala " + roomCode);
+            System.out.println("⚠ Jugadores ya spawneados en sala " + roomCode);
             return players.stream()
                     .map(p -> {
                         Map<String, Object> playerData = new HashMap<>();
@@ -220,9 +276,12 @@ public class GamePlayServices {
             player.setY(startY);
             player.setHealth(Player.DEFAULT_HEALTH);
             playerRepository.save(player);
-            System.out.println(" Spawneado: " + player.getPlayerName() +
+            System.out.println("✓ Spawneado: " + player.getPlayerName() +
                     " en (" + (int)player.getX() + ", " + (int)player.getY() + ")");
         }
+
+        // Cargar sala en caché después del spawn
+        roomCache.put(roomCode, room);
 
         // Spawnear NPCs después
         npcManager.spawnInitialNpcs(roomCode);
@@ -241,11 +300,12 @@ public class GamePlayServices {
     }
 
     public GameRoom getRoomInMemory(String roomCode) {
-        return getRoomByCode(roomCode);
+        return getOrLoadRoom(roomCode);
     }
 
     public synchronized void playerWhipAttack(String roomCode, String playerName) {
-        GameRoom room = getRoomByCode(roomCode);
+        System.out.println("🗡️ Ejecutando ataque de " + playerName + " en sala " + roomCode);
+        GameRoom room = getOrLoadRoom(roomCode);
         Player player = room.getPlayers().stream()
                 .filter(p -> p.getPlayerName().equals(playerName))
                 .findFirst()
@@ -253,14 +313,16 @@ public class GamePlayServices {
 
         if (player == null || !player.isAlive() || !player.canAttack()) return;
 
-        final double RANGE = 90.0;
-        final double HEIGHT = 25.0;
+        final double RANGE = 100.0;
+        final double HEIGHT = 100.0;
         final int DAMAGE = 20;
 
         double px = player.getX();
         double py = player.getY();
 
         List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
+        boolean hitSomething = false;
+
         if (npcs == null || npcs.isEmpty()) return;
 
         for (NPC npc : npcs) {
@@ -279,19 +341,20 @@ public class GamePlayServices {
             }
 
             if (inRange) {
+                hitSomething = true;
                 boolean killed = npc.receiveDamage(DAMAGE, player.getPlayerName());
                 if (killed) {
-                    System.out.println(" " + playerName + " mató un NPC!");
-                    // Enviar evento de NPC muerto
+                    System.out.println("💀 " + playerName + " mató un NPC!");
                     Map<String, Object> event = new HashMap<>();
                     event.put("type", "NPC_KILLED");
                     event.put("npcId", npc.getId());
                     event.put("killedBy", playerName);
                     messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
+                } else {
+                    System.out.println("🗡️ " + playerName + " golpeó NPC (HP: " + npc.getHealth() + ")");
                 }
             }
-        }
-    }
+    }}
 
     private void checkChestInteraction(GameRoom room, Player player) {
         if (!player.isAlive()) return;
@@ -313,9 +376,8 @@ public class GamePlayServices {
                     boolean opened = chestService.tryOpenChest(chest.getId());
                     if (opened) {
                         addExperience(room.getRoomCode(), CHEST_REWARD_XP);
-                        System.out.println(" " + player.getPlayerName() + " abrió un cofre!");
+                        System.out.println("📦 " + player.getPlayerName() + " abrió un cofre!");
 
-                        // Enviar evento de cofre abierto
                         Map<String, Object> event = new HashMap<>();
                         event.put("type", "CHEST_OPENED");
                         event.put("chestId", chest.getId());
@@ -328,7 +390,7 @@ public class GamePlayServices {
     }
 
     private void checkGameOver(String roomCode) {
-        GameRoom room = getRoomByCode(roomCode);
+        GameRoom room = getOrLoadRoom(roomCode);
 
         boolean allDead = room.getPlayers().stream()
                 .allMatch(p -> !p.isAlive());
@@ -339,7 +401,7 @@ public class GamePlayServices {
     }
 
     private void onGameLost(String roomCode) {
-        GameRoom room = getRoomByCode(roomCode);
+        GameRoom room = getOrLoadRoom(roomCode);
         room.setGameStarted(false);
 
         for (Player p : room.getPlayers()) {
@@ -350,13 +412,15 @@ public class GamePlayServices {
 
         experienceService.resetRoomXp(roomCode);
 
-        // Enviar evento de game over
         Map<String, Object> event = new HashMap<>();
         event.put("type", "GAME_OVER");
         event.put("roomCode", roomCode);
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
 
-        System.out.println(" GAME OVER en sala " + roomCode);
+        System.out.println("💀 GAME OVER en sala " + roomCode);
+
+        // Limpiar sala del caché
+        roomCache.remove(roomCode);
 
         gameRoomRepository.save(room);
     }
