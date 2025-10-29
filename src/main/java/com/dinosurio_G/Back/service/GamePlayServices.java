@@ -319,9 +319,9 @@ public class GamePlayServices {
             return;
         }
 
-        final double RANGE = 100.0;
-        final double HEIGHT = 120.0;
-        final int DAMAGE = 20;
+        final double RANGE = 80.0;
+        final double HEIGHT = 100.0;
+        final int DAMAGE = 5;
 
         double px = player.getX();
         double py = player.getY();
