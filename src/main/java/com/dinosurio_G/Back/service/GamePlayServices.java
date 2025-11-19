@@ -124,8 +124,11 @@ public class GamePlayServices {
 
             // 4. Ejecutar ataques automáticos por jugador
             for (Player player : room.getPlayers()) {
-                if (player.isAlive() && player.canAttack()) {
-                    playerWhipAttack(room.getRoomCode(), player.getPlayerName());
+                if (player.isAlive()) {
+                    long now = System.currentTimeMillis();
+                    if (now - player.getLastAttackTime() >= 1500) {
+                        playerWhipAttack(room.getRoomCode(), player.getPlayerName());
+                    }
                 }
             }
 
@@ -304,26 +307,34 @@ public class GamePlayServices {
     }
 
     public synchronized void playerWhipAttack(String roomCode, String playerName) {
-        System.out.println("🗡️ Ejecutando ataque de " + playerName + " en sala " + roomCode);
+        System.out.println("⚔️ Ejecutando ataque de " + playerName + " en sala " + roomCode);
         GameRoom room = getOrLoadRoom(roomCode);
         Player player = room.getPlayers().stream()
                 .filter(p -> p.getPlayerName().equals(playerName))
                 .findFirst()
                 .orElse(null);
 
-        if (player == null || !player.isAlive() || !player.canAttack()) return;
+        if (player == null || !player.isAlive()) {
+            System.out.println("❌ Jugador no válido para atacar");
+            return;
+        }
 
-        final double RANGE = 100.0;
+        final double RANGE = 80.0;
         final double HEIGHT = 100.0;
-        final int DAMAGE = 20;
+        final int DAMAGE = 5;
 
         double px = player.getX();
         double py = player.getY();
 
         List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
-        boolean hitSomething = false;
 
-        if (npcs == null || npcs.isEmpty()) return;
+        if (npcs == null || npcs.isEmpty()) {
+            System.out.println("⚠️ No hay NPCs en la sala " + roomCode);
+            return;
+        }
+
+        boolean hitSomething = false;
+        int npcsHit = 0;
 
         for (NPC npc : npcs) {
             if (npc.isDead()) continue;
@@ -331,30 +342,47 @@ public class GamePlayServices {
             double nx = npc.getX();
             double ny = npc.getY();
 
+            // Calcular hitbox según dirección
             boolean inRange;
             if (player.isFacingRight()) {
-                inRange = nx >= px && nx <= px + RANGE &&
-                        ny >= py - HEIGHT / 2 && ny <= py + HEIGHT / 2;
+                // Atacando hacia la derecha: de px hasta px+RANGE
+                inRange = nx >= px && nx <= (px + RANGE) &&
+                        ny >= (py - HEIGHT / 2) && ny <= (py + HEIGHT / 2);
             } else {
-                inRange = nx <= px && nx >= px - RANGE &&
-                        ny >= py - HEIGHT / 2 && ny <= py + HEIGHT / 2;
+                // Atacando hacia la izquierda: de px-RANGE hasta px
+                inRange = nx <= px && nx >= (px - RANGE) &&
+                        ny >= (py - HEIGHT / 2) && ny <= (py + HEIGHT / 2);
             }
 
             if (inRange) {
                 hitSomething = true;
+                npcsHit++;
+
                 boolean killed = npc.receiveDamage(DAMAGE, player.getPlayerName());
+
                 if (killed) {
-                    System.out.println("💀 " + playerName + " mató un NPC!");
+                    System.out.println("💀 " + playerName + " MATÓ un NPC #" + npc.getId());
+
                     Map<String, Object> event = new HashMap<>();
                     event.put("type", "NPC_KILLED");
                     event.put("npcId", npc.getId());
                     event.put("killedBy", playerName);
                     messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
                 } else {
-                    System.out.println("🗡️ " + playerName + " golpeó NPC (HP: " + npc.getHealth() + ")");
+                    System.out.println("🗡️ " + playerName + " golpeó NPC #" + npc.getId() +
+                            " (HP: " + npc.getHealth() + "/" + DAMAGE + " daño)");
                 }
             }
-    }}
+        }
+
+        if (hitSomething) {
+            System.out.println("✅ " + playerName + " impactó " + npcsHit + " NPC(s)");
+        } else {
+            System.out.println("❌ " + playerName + " no golpeó nada (Dir: " +
+                    (player.isFacingRight() ? "→" : "←") +
+                    ", Pos: " + (int)px + "," + (int)py + ")");
+        }
+    }
 
     private void checkChestInteraction(GameRoom room, Player player) {
         if (!player.isAlive()) return;
@@ -423,5 +451,26 @@ public class GamePlayServices {
         roomCache.remove(roomCode);
 
         gameRoomRepository.save(room);
+    }
+
+    /**
+     * Obtiene los cofres activos de una sala (para el frontend)
+     */
+    public List<Map<String, Object>> getChestsForRoom(String roomCode) {
+        GameRoom room = getRoomByCode(roomCode);
+        if (room.getMap() == null) {
+            return Collections.emptyList();
+        }
+
+        return chestService.findByMapId(room.getMap().getId()).stream()
+                .map(chest -> {
+                    Map<String, Object> chestData = new HashMap<>();
+                    chestData.put("id", chest.getId());
+                    chestData.put("x", chest.getPosition().getX());
+                    chestData.put("y", chest.getPosition().getY());
+                    chestData.put("active", chest.isActive());
+                    return chestData;
+                })
+                .collect(Collectors.toList());
     }
 }
