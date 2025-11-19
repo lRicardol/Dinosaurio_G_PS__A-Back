@@ -1,14 +1,17 @@
 package com.dinosurio_G.Back.controller;
 
 import com.dinosurio_G.Back.model.GameMap;
+import com.dinosurio_G.Back.service.GamePlayServices;
 import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -21,6 +24,9 @@ import java.util.concurrent.CompletableFuture;
 public class GameMapController {
 
     private final GameMapService gameMapService;
+
+    @Autowired
+    public GamePlayServices gamePlayServices;
 
     @Autowired
     public GameMapController(GameMapService gameMapService) {
@@ -107,5 +113,15 @@ public class GameMapController {
         return gameMapService.updateAsync(id, () -> {
             System.out.println("Actualización concurrente segura ejecutada en mapa " + id);
         }).thenApply(v -> ResponseEntity.ok().build());
+    }
+
+    @GetMapping("/chests/{roomCode}")
+    public ResponseEntity<List<Map<String, Object>>> getChests(@PathVariable String roomCode) {
+        try {
+            List<Map<String, Object>> chests = gamePlayServices.getChestsForRoom(roomCode);
+            return ResponseEntity.ok(chests);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }

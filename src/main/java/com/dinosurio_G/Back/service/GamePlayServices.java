@@ -452,4 +452,25 @@ public class GamePlayServices {
 
         gameRoomRepository.save(room);
     }
+
+    /**
+     * Obtiene los cofres activos de una sala (para el frontend)
+     */
+    public List<Map<String, Object>> getChestsForRoom(String roomCode) {
+        GameRoom room = getRoomByCode(roomCode);
+        if (room.getMap() == null) {
+            return Collections.emptyList();
+        }
+
+        return chestService.findByMapId(room.getMap().getId()).stream()
+                .map(chest -> {
+                    Map<String, Object> chestData = new HashMap<>();
+                    chestData.put("id", chest.getId());
+                    chestData.put("x", chest.getPosition().getX());
+                    chestData.put("y", chest.getPosition().getY());
+                    chestData.put("active", chest.isActive());
+                    return chestData;
+                })
+                .collect(Collectors.toList());
+    }
 }
