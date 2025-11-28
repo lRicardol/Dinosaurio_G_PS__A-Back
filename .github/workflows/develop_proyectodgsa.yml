@@ -100,3 +100,4 @@ jobs:
           app-name: 'ProyectoDGSA'
           slot-name: 'Production'
           package: '*.jar'
+
