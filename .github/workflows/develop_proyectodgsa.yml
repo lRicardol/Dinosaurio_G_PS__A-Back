@@ -6,7 +6,7 @@ name: Build, Analyze and Deploy JAR app to Azure Web App - ProyectoDGSA
 on:
   push:
     branches:
-      - main
+      - Develop
   workflow_dispatch:
 
 jobs:
