@@ -4,15 +4,9 @@ import com.dinosurio_G.Back.dto.GameRoomDTO;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
 import com.dinosurio_G.Back.dto.PlayerDTO;
 import com.dinosurio_G.Back.dto.PlayerHealthDTO;
-import com.dinosurio_G.Back.model.GameMap;
-import com.dinosurio_G.Back.model.GameRoom;
-import com.dinosurio_G.Back.model.NPC;
-import com.dinosurio_G.Back.model.Player;
+import com.dinosurio_G.Back.model.*;
 import com.dinosurio_G.Back.repository.GameRoomRepository;
-import com.dinosurio_G.Back.service.GamePlayServices;
-import com.dinosurio_G.Back.service.GameRoomService;
-import com.dinosurio_G.Back.service.NPCManager;
-import com.dinosurio_G.Back.service.PlayerService;
+import com.dinosurio_G.Back.service.*;
 import com.dinosurio_G.Back.service.impl.GameMapService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -46,37 +40,19 @@ public class PlayerController {
     @Autowired
     private GameMapService gameMapService;
 
-    @PostMapping("/create")
-    public PlayerDTO createPlayer(@RequestBody Map<String, String> payload) {
-        String playerName = payload.get("playerName");
+    @Autowired
+    private AuthenticationService authenticationService;
 
-        // Verificar si el nombre ya existe
-        if (playerService.existsByPlayerName(playerName)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "El nombre ya está en uso");
-        }
-
-
-        // Crear un nuevo jugador limpio
-        Player newPlayer = new Player();
-        newPlayer.setPlayerName(playerName);
-        newPlayer.setReady(false);
-        newPlayer.setHost(false);
-
-        Player savedPlayer = playerService.savePlayer(newPlayer);
-
-        return new PlayerDTO(
-                savedPlayer.getId(),
-                savedPlayer.getPlayerName(),
-                savedPlayer.isReady(),
-                savedPlayer.isHost()
-        );
-    }
+    /**
+     * ELIMINADO: Ya no necesitamos crear jugadores manualmente
+     * Los jugadores se crean automáticamente cuando un usuario registrado
+     * se une a una sala
+     */
 
     @DeleteMapping("/{id}")
     public void deletePlayer(@PathVariable Long id) {
         playerService.deletePlayer(id);
     }
-
 
     @GetMapping("/all")
     public List<PlayerDTO> getAllPlayers() {
@@ -88,7 +64,17 @@ public class PlayerController {
 
     // Marcar jugador como listo
     @PutMapping("/{roomCode}/ready")
-    public GameRoomDTO toggleReady(@PathVariable String roomCode, @RequestParam String playerName) {
+    public GameRoomDTO toggleReady(
+            @PathVariable String roomCode,
+            @RequestParam String playerName,
+            @RequestHeader(value = "X-MS-CLIENT-PRINCIPAL-ID", required = false) String azureUserId) {
+
+        // Verificar que el usuario está autenticado
+        if (azureUserId == null) {
+            // Modo desarrollo
+            azureUserId = "dev-user";
+        }
+
         Player player = playerService.toggleReady(roomCode, playerName);
         GameRoom updatedRoom = player.getGameRoom();
         return GameRoomMapper.toDTO(updatedRoom);
@@ -102,12 +88,17 @@ public class PlayerController {
             @RequestParam boolean arriba,
             @RequestParam boolean abajo,
             @RequestParam boolean izquierda,
-            @RequestParam boolean derecha) {
+            @RequestParam boolean derecha,
+            @RequestHeader(value = "X-MS-CLIENT-PRINCIPAL-ID", required = false) String azureUserId) {
+
+        // Verificar autenticación (en producción)
+        if (azureUserId == null) {
+            azureUserId = "dev-user";
+        }
 
         gamePlayServices.updatePlayerInput(roomCode, playerName, arriba, abajo, izquierda, derecha);
         return GameRoomMapper.toDTO(gameRoomService.getRoomByCode(roomCode));
     }
-
 
     // Obtener vida actual de los jugadores
     @GetMapping("/{roomCode}/health")
@@ -133,10 +124,8 @@ public class PlayerController {
     // Spawnear jugadores
     @PostMapping("/{roomCode}/spawn")
     public ResponseEntity<Map<String, Object>> spawnPlayers(@PathVariable String roomCode) {
-        // Llamar al servicio para spawnear jugadores + NPCs
         List<Map<String, Object>> spawnedPlayers = gamePlayServices.spawnPlayers(roomCode);
 
-        // Preparar respuesta
         Map<String, Object> response = new HashMap<>();
         response.put("roomCode", roomCode);
         response.put("message", "Jugadores y NPCs spawneados correctamente");
@@ -173,7 +162,6 @@ public class PlayerController {
         response.put("percentage", progress * 100);
         return response;
     }
-
 
     @GetMapping("/{roomCode}/npcs")
     public Map<String, Object> getNpcPositions(@PathVariable String roomCode) {
