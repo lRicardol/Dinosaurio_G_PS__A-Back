@@ -11,9 +11,14 @@ public class Player {
 
     @Column(unique = true)
     private String playerName;
+
+    // Relación con UserAccount
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_account_id", nullable = true)
+    private UserAccount userAccount;
+
     private boolean ready = false;
     private boolean host = false;
-
 
     private double speed;
     private int health;
@@ -25,7 +30,6 @@ public class Player {
     @Transient
     private boolean facingRight = true;
 
-
     private boolean arriba = false;
     private boolean abajo = false;
     private boolean izquierda = false;
@@ -33,9 +37,8 @@ public class Player {
 
     private boolean isAlive = true;
 
-    private double x; // posición en X
-    private double y; // posición en Y
-    
+    private double x;
+    private double y;
 
     @ManyToOne(optional = true)
     @JoinColumn(name = "game_room_id", nullable = true)
@@ -46,7 +49,7 @@ public class Player {
         this.speed = DEFAULT_SPEED;
     }
 
-    public Player(String playerName, boolean host, double startX, double startY ) {
+    public Player(String playerName, boolean host, double startX, double startY) {
         this.playerName = playerName;
         this.host = host;
         this.x = startX;
@@ -55,7 +58,6 @@ public class Player {
         this.health = DEFAULT_HEALTH;
     }
 
-    //Input de la dirección a la que se mueve el jugador
     public void setInput(boolean arriba, boolean abajo, boolean izquierda, boolean derecha) {
         this.arriba = arriba;
         this.abajo = abajo;
@@ -63,27 +65,24 @@ public class Player {
         this.derecha = derecha;
     }
 
-    // Actualizar posición del jugador
     public synchronized void actualizar() {
         if (gameRoom == null || gameRoom.getMap() == null) return;
 
         double newX = x;
         double newY = y;
 
-        // Actualizar posición
         if (arriba && !abajo) newY -= speed;
         if (abajo && !arriba) newY += speed;
 
         if (izquierda && !derecha) {
             newX -= speed;
-            facingRight = false; // Si se mueve a la izquierda, mira a la izquierda
+            facingRight = false;
         }
         if (derecha && !izquierda) {
             newX += speed;
-            facingRight = true;  // Si se mueve a la derecha, mira a la derecha
+            facingRight = true;
         }
 
-        // Limitar dentro del mapa
         GameMap map = gameRoom.getMap();
         newX = Math.max(0, Math.min(map.getWidth(), newX));
         newY = Math.max(0, Math.min(map.getHeight(), newY));
@@ -92,10 +91,9 @@ public class Player {
         y = newY;
     }
 
-// Tiempo de ataque
     public boolean canAttack() {
         long now = System.currentTimeMillis();
-        long attackCooldownMs = 5000; //Tiempo de ataque en milisegundos
+        long attackCooldownMs = 5000;
         if (now - lastAttackTime >= attackCooldownMs) {
             lastAttackTime = now;
             return true;
@@ -103,7 +101,6 @@ public class Player {
         return false;
     }
 
-    //Recibir daño
     public synchronized void receiveDamage(int damage) {
         if (!isAlive() || damage <= 0) return;
 
@@ -119,12 +116,8 @@ public class Player {
         return facingRight;
     }
 
-    /**
-     * Lógica que ocurre cuando el jugador muere.
-     */
     private void onDeath() {
         System.out.println(playerName + " ha muerto.");
-        // Aquí podrías resetear posición, notificar al front, etc.
     }
 
     public long getLastAttackTime() {
@@ -141,20 +134,29 @@ public class Player {
 
     // Getters y Setters
     public Long getId() { return id; }
+
     public String getPlayerName() { return playerName; }
     public void setPlayerName(String playerName) { this.playerName = playerName; }
+
+    public UserAccount getUserAccount() { return userAccount; }
+    public void setUserAccount(UserAccount userAccount) { this.userAccount = userAccount; }
+
+
     public boolean isReady() { return ready; }
     public void setReady(boolean ready) { this.ready = ready; }
+
     public boolean isHost() { return host; }
     public void setHost(boolean host) { this.host = host; }
+
     public GameRoom getGameRoom() { return gameRoom; }
     public void setGameRoom(GameRoom gameRoom) { this.gameRoom = gameRoom; }
 
-
     public double getSpeed() { return speed; }
     public void setSpeed(double speed) { this.speed = speed; }
+
     public int getHealth() { return health; }
     public void setHealth(int health) { this.health = health; }
+
     public double getX() { return x; }
     public void setX(double x) { this.x = x; }
 

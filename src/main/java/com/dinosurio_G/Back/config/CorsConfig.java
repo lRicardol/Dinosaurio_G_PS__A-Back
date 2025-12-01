@@ -13,11 +13,20 @@ public class CorsConfig {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**") // Aplica a todos los endpoints
-                        .allowedOrigins("https://vampire-multiple-survivor.vercel.app/") // URL de front con Next.js
+                registry.addMapping("/**")
+                        .allowedOrigins(
+                                "https://vampire-multiple-survivor.vercel.app",
+                                "http://localhost:3000"
+                        )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                         .allowedHeaders("*")
-                        .allowCredentials(true);
+                        .exposedHeaders(
+                                "X-MS-CLIENT-PRINCIPAL-ID",
+                                "X-MS-CLIENT-PRINCIPAL-NAME",
+                                "X-MS-CLIENT-PRINCIPAL"
+                        )
+                        .allowCredentials(true)
+                        .maxAge(3600);
             }
         };
     }
