@@ -126,4 +126,32 @@ public class GameRoomServiceTest {
         verify(messagingTemplate, times(2)).convertAndSend(anyString(), (Object) any());
         assertTrue(result.isGameStarted());
     }
+
+    // ---------------------- deleteRoom ----------------------
+
+    @Test
+    void testDeleteRoom_NotFound() {
+        String code = "XYZ999";
+
+        when(gameRoomRepository.findByRoomCode(code)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> gameRoomService.deleteRoom(code));
+
+        assertEquals("La sala con código XYZ999 no existe", ex.getMessage());
+        verify(gameRoomRepository, never()).delete(any());
+    }
+
+    @Test
+    void testDeleteRoom_Success() {
+        String code = "DEL123";
+        GameRoom room = new GameRoom();
+        room.setRoomCode(code);
+
+        when(gameRoomRepository.findByRoomCode(code)).thenReturn(Optional.of(room));
+
+        gameRoomService.deleteRoom(code);
+
+        verify(gameRoomRepository).delete(room);
+    }
 }
