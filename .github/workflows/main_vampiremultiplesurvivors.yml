@@ -1,4 +1,7 @@
-name: Build, Analyze and Deploy - Dinosaurio
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build, Analyze and Deploy - VampireMultipleSurvivors
 
 on:
   push:
@@ -15,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # Necesario para análisis correcto
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -44,8 +47,7 @@ jobs:
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey=lRicardol_Dinosaurio_G_PS__A-Back \
             -Dsonar.organization=lricardol-2 \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+            -Dsonar.host.url=https://sonarcloud.io
 
   build:
     runs-on: windows-latest
@@ -87,9 +89,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_31FED95F35E94C47B6D2B2E7BC28F01A }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F0325E1125C44517A68C41B71348732C }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_22F97C6F3F1E43A0A2C20664A5A6C7E4 }}
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
