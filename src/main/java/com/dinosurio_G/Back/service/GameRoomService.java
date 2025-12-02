@@ -49,10 +49,16 @@ public class GameRoomService {
         UserAccount hostAccount = userAccountRepository.findByPlayerName(playerName)
                 .orElseThrow(() -> new RuntimeException("El jugador " + playerName + " no está registrado"));
 
-        // Verificar si el usuario ya tiene un Player activo en otra sala
+        //  FIX: Limpiar jugador si tenía sala anterior
         Player existingPlayer = playerRepository.findByPlayerName(playerName).orElse(null);
         if (existingPlayer != null && existingPlayer.getGameRoom() != null) {
-            throw new RuntimeException("Ya tienes una partida activa");
+            System.out.println(" Limpiando sala anterior para " + playerName);
+            existingPlayer.setGameRoom(null);
+            existingPlayer.setReady(false);
+            existingPlayer.setHost(false);
+            existingPlayer.setX(0);
+            existingPlayer.setY(0);
+            playerRepository.save(existingPlayer);
         }
 
         // Crear la sala
