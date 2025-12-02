@@ -132,4 +132,80 @@ public class AuthController {
         urls.put("userInfo", "/.auth/me");
         return ResponseEntity.ok(urls);
     }
+
+    /**
+     * Validar y activar sesión única
+     * Este endpoint debe llamarse cuando el usuario accede a initialScreen
+     */
+    @PostMapping("/activate-session")
+    public ResponseEntity<Map<String, Object>> activateSession(
+            @RequestHeader(value = "X-MS-CLIENT-PRINCIPAL-ID", required = false) String azureUserId,
+            @RequestHeader(value = "X-MS-CLIENT-PRINCIPAL-NAME", required = false) String email) {
+
+        Map<String, Object> response = new HashMap<>();
+
+        if (azureUserId == null || email == null) {
+            response.put("error", "Usuario no autenticado");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+
+        try {
+            UserAccount user = authenticationService.getUserByAzureId(azureUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+            // VALIDAR: Si ya tiene sesión activa, rechazar
+            if (user.isHasActiveSession()) {
+                response.put("success", false);
+                response.put("hasActiveSession", true);
+                response.put("message", "Esta cuenta ya tiene una sesión activa en otro dispositivo");
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+            }
+
+            // Activar sesión
+            user.startSession();
+            authenticationService.saveUser(user);
+
+            response.put("success", true);
+            response.put("hasActiveSession", false);
+            response.put("playerName", user.getPlayerName());
+            response.put("message", "Sesión activada correctamente");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * Desactivar sesión
+     * Llamar cuando el usuario sale o cierra la app
+     */
+    @PostMapping("/deactivate-session")
+    public ResponseEntity<Map<String, String>> deactivateSession(
+            @RequestHeader(value = "X-MS-CLIENT-PRINCIPAL-ID", required = false) String azureUserId) {
+
+        Map<String, String> response = new HashMap<>();
+
+        if (azureUserId == null) {
+            response.put("error", "Usuario no autenticado");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+
+        try {
+            UserAccount user = authenticationService.getUserByAzureId(azureUserId)
+                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+            user.endSession();
+            authenticationService.saveUser(user);
+
+            response.put("message", "Sesión desactivada");
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
 }
