@@ -91,11 +91,6 @@ public class GameRoomService {
 
         savedRoom.getPlayers().add(host);
 
-        // ACTIVAR SESIÓN al crear sala
-        hostAccount.startSession();
-        userAccountRepository.save(hostAccount);
-        System.out.println(" Sesión activada para " + playerName);
-
         return gameRoomRepository.save(savedRoom);
     }
 
@@ -126,11 +121,6 @@ public class GameRoomService {
         UserAccount userAccount = userAccountRepository.findByPlayerName(playerName)
                 .orElseThrow(() -> new RuntimeException("El jugador " + playerName + " no está registrado"));
 
-        // VALIDACIÓN ANTI-SUPLANTACIÓN: Verificar si tiene sesión activa
-        if (userAccount.isHasActiveSession()) {
-            throw new RuntimeException("Esta cuenta ya tiene una sesión activa en otro dispositivo. Cierra la otra sesión primero.");
-        }
-
         // Verificar si ya existe un Player con ese nombre
         Player player = playerRepository.findByPlayerName(playerName).orElse(null);
 
@@ -150,11 +140,6 @@ public class GameRoomService {
             player.setHost(false);
             player.setReady(false);
             playerRepository.save(player);
-
-            // ACTIVAR SESIÓN al unirse a sala
-            userAccount.startSession();
-            userAccountRepository.save(userAccount);
-            System.out.println(" Sesión activada para " + playerName);
         }
 
         return gameRoomRepository.save(room);
