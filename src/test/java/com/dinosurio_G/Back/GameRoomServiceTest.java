@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.*;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -153,5 +154,94 @@ public class GameRoomServiceTest {
         gameRoomService.deleteRoom(code);
 
         verify(gameRoomRepository).delete(room);
+    }
+
+    // ---------------------- joinRoom ----------------------
+
+    @Test
+    void testJoinRoom_RoomNotFound() {
+        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> gameRoomService.joinRoom("ROOM1", "PlayerX"));
+
+        assertEquals("La sala con código ROOM1 no existe", ex.getMessage());
+    }
+
+    @Test
+    void testJoinRoom_RoomFull() {
+        GameRoom room = new GameRoom();
+        room.setMaxPlayers(1);
+        room.setPlayers(List.of(new Player())); // ya hay 1 → llena
+
+        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> gameRoomService.joinRoom("ROOM1", "PlayerX"));
+
+        assertEquals("La sala está llena", ex.getMessage());
+    }
+
+    @Test
+    void testJoinRoom_UserNotRegistered() {
+        GameRoom room = new GameRoom();
+        room.setMaxPlayers(5);
+        room.setPlayers(List.of());
+
+        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
+        when(userAccountRepository.findByPlayerName("PlayerX")).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> gameRoomService.joinRoom("ROOM1", "PlayerX"));
+
+        assertEquals("El jugador PlayerX no está registrado", ex.getMessage());
+    }
+
+
+
+
+    @Test
+    void testJoinRoom_Success_NewPlayer() {
+        GameRoom room = new GameRoom();
+        room.setMaxPlayers(5);
+        room.setPlayers(new java.util.ArrayList<>());
+
+        UserAccount acc = new UserAccount();
+        acc.setPlayerName("PlayerX");
+
+        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
+        when(userAccountRepository.findByPlayerName("PlayerX")).thenReturn(Optional.of(acc));
+        when(playerRepository.findByPlayerName("PlayerX")).thenReturn(Optional.empty());
+        when(playerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(gameRoomRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        GameRoom updated = gameRoomService.joinRoom("ROOM1", "PlayerX");
+
+        assertEquals(1, updated.getPlayers().size());
+        assertFalse(updated.getPlayers().get(0).isHost());
+    }
+
+    @Test
+    void testJoinRoom_Success_ExistingPlayerReused() {
+        GameRoom room = new GameRoom();
+        room.setMaxPlayers(5);
+        room.setPlayers(new java.util.ArrayList<>());
+
+        UserAccount acc = new UserAccount();
+        acc.setPlayerName("PlayerX");
+
+        Player existing = new Player();
+        existing.setPlayerName("PlayerX");
+        existing.setUserAccount(acc);
+
+        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
+        when(userAccountRepository.findByPlayerName("PlayerX")).thenReturn(Optional.of(acc));
+        when(playerRepository.findByPlayerName("PlayerX")).thenReturn(Optional.of(existing));
+        when(playerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(gameRoomRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        GameRoom updated = gameRoomService.joinRoom("ROOM1", "PlayerX");
+
+        assertEquals(1, updated.getPlayers().size());
     }
 }
