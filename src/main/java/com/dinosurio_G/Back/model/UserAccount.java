@@ -55,6 +55,16 @@ public class UserAccount {
      */
     private boolean active = true;
 
+    /**
+     * Indica si el usuario tiene una sesión activa (está jugando)
+     */
+    private boolean hasActiveSession = false;
+
+    /**
+     * Timestamp de la última actividad (para detectar sesiones inactivas)
+     */
+    private LocalDateTime lastActivity;
+
     // Constructores
     public UserAccount() {
         this.createdAt = LocalDateTime.now();
@@ -72,6 +82,23 @@ public class UserAccount {
     // Método para actualizar último login
     public void updateLastLogin() {
         this.lastLoginAt = LocalDateTime.now();
+        this.lastActivity = LocalDateTime.now();
+    }
+
+    // Método para actualizar última actividad
+    public void updateActivity() {
+        this.lastActivity = LocalDateTime.now();
+    }
+
+    // Método para activar sesión
+    public void startSession() {
+        this.hasActiveSession = true;
+        this.lastActivity = LocalDateTime.now();
+    }
+
+    // Método para desactivar sesión
+    public void endSession() {
+        this.hasActiveSession = false;
     }
 
     // Getters y Setters
@@ -137,6 +164,22 @@ public class UserAccount {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isHasActiveSession() {
+        return hasActiveSession;
+    }
+
+    public void setHasActiveSession(boolean hasActiveSession) {
+        this.hasActiveSession = hasActiveSession;
+    }
+
+    public LocalDateTime getLastActivity() {
+        return lastActivity;
+    }
+
+    public void setLastActivity(LocalDateTime lastActivity) {
+        this.lastActivity = lastActivity;
     }
 
     @Override

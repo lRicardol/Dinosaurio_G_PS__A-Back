@@ -307,7 +307,7 @@ public class GamePlayServices {
     }
 
     public synchronized void playerWhipAttack(String roomCode, String playerName) {
-        System.out.println("⚔️ Ejecutando ataque de " + playerName + " en sala " + roomCode);
+        System.out.println(" Ejecutando ataque de " + playerName + " en sala " + roomCode);
         GameRoom room = getOrLoadRoom(roomCode);
         Player player = room.getPlayers().stream()
                 .filter(p -> p.getPlayerName().equals(playerName))
@@ -315,7 +315,7 @@ public class GamePlayServices {
                 .orElse(null);
 
         if (player == null || !player.isAlive()) {
-            System.out.println("❌ Jugador no válido para atacar");
+            System.out.println(" Jugador no válido para atacar");
             return;
         }
 
@@ -329,7 +329,7 @@ public class GamePlayServices {
         List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
 
         if (npcs == null || npcs.isEmpty()) {
-            System.out.println("⚠️ No hay NPCs en la sala " + roomCode);
+            System.out.println(" No hay NPCs en la sala " + roomCode);
             return;
         }
 
@@ -361,7 +361,7 @@ public class GamePlayServices {
                 boolean killed = npc.receiveDamage(DAMAGE, player.getPlayerName());
 
                 if (killed) {
-                    System.out.println("💀 " + playerName + " MATÓ un NPC #" + npc.getId());
+                    System.out.println(" " + playerName + " MATÓ un NPC #" + npc.getId());
 
                     Map<String, Object> event = new HashMap<>();
                     event.put("type", "NPC_KILLED");
@@ -369,16 +369,16 @@ public class GamePlayServices {
                     event.put("killedBy", playerName);
                     messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
                 } else {
-                    System.out.println("🗡️ " + playerName + " golpeó NPC #" + npc.getId() +
+                    System.out.println(" " + playerName + " golpeó NPC #" + npc.getId() +
                             " (HP: " + npc.getHealth() + "/" + DAMAGE + " daño)");
                 }
             }
         }
 
         if (hitSomething) {
-            System.out.println("✅ " + playerName + " impactó " + npcsHit + " NPC(s)");
+            System.out.println(" " + playerName + " impactó " + npcsHit + " NPC(s)");
         } else {
-            System.out.println("❌ " + playerName + " no golpeó nada (Dir: " +
+            System.out.println(" " + playerName + " no golpeó nada (Dir: " +
                     (player.isFacingRight() ? "→" : "←") +
                     ", Pos: " + (int)px + "," + (int)py + ")");
         }
@@ -430,27 +430,46 @@ public class GamePlayServices {
 
     private void onGameLost(String roomCode) {
         GameRoom room = getOrLoadRoom(roomCode);
-        room.setGameStarted(false);
 
+        // Limpiar jugadores y desactivar sesiones
         for (Player p : room.getPlayers()) {
+            // Desactivar sesión del UserAccount
+            if (p.getUserAccount() != null) {
+                p.getUserAccount().endSession();
+                playerRepository.save(p);  // Esto también guarda el UserAccount en cascada
+                System.out.println(" Sesión desactivada para " + p.getPlayerName());
+            }
+
             p.setReady(false);
             p.setHealth(Player.DEFAULT_HEALTH);
+            p.setX(0);
+            p.setY(0);
+            p.setHost(false);
+            p.setGameRoom(null);
             playerRepository.save(p);
         }
 
+        room.getPlayers().clear();
         experienceService.resetRoomXp(roomCode);
 
+        // Notificar Game Over
         Map<String, Object> event = new HashMap<>();
         event.put("type", "GAME_OVER");
         event.put("roomCode", roomCode);
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
 
-        System.out.println("💀 GAME OVER en sala " + roomCode);
+        System.out.println(" GAME OVER en sala " + roomCode + " - Jugadores desvinculados");
 
         // Limpiar sala del caché
         roomCache.remove(roomCode);
 
-        gameRoomRepository.save(room);
+        // Eliminar la sala de la base de datos
+        try {
+            gameRoomRepository.delete(room);
+            System.out.println("️ Sala " + roomCode + " eliminada de la base de datos");
+        } catch (Exception e) {
+            System.err.println("Error eliminando sala: " + e.getMessage());
+        }
     }
 
     /**
