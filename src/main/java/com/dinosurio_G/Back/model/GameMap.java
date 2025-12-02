@@ -28,7 +28,7 @@ public class GameMap {
     @OneToMany(mappedBy = "map", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Chest> chests = new CopyOnWriteArrayList<>();
 
-    protected GameMap() {
+    public GameMap() {
     }
 
     public GameMap(String name, String shape, String description) {

@@ -162,4 +162,7 @@ public class Player {
 
     public double getY() { return y; }
     public void setY(double y) { this.y = y; }
+
+    public void setId(long l) {
+    }
 }
