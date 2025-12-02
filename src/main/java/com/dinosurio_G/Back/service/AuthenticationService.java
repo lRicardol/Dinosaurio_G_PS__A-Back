@@ -78,11 +78,4 @@ public class AuthenticationService {
     public boolean isPlayerNameAvailable(String playerName) {
         return !userAccountRepository.existsByPlayerName(playerName);
     }
-
-    /**
-     * Guardar usuario (para actualizar sesión)
-     */
-    public UserAccount saveUser(UserAccount user) {
-        return userAccountRepository.save(user);
-    }
 }
