@@ -17,33 +17,18 @@ public class ExperienceService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
-    // INYECTAR GamePlayServices para limpiar sesiones
-    @Autowired
-    @Lazy
-    private GamePlayServices gamePlayServices;
-
     public void addExperience(String roomCode, int amount) {
         experienceByRoom.merge(roomCode, amount, Integer::sum);
         int currentXp = experienceByRoom.get(roomCode);
 
         if (currentXp >= GOAL_XP) {
             experienceByRoom.put(roomCode, GOAL_XP);
-
-            System.out.println("🎉 ¡La partida en " + roomCode + " se ha GANADO! Procesando victoria...");
-
-            // LLAMAR al método que limpia sesiones
-            gamePlayServices.onGameWon(roomCode);
-
-            // Ya no necesitas notificar aquí porque onGameWon() lo hace
-            // messagingTemplate.convertAndSend(...) <- Esto lo hace gamePlayServices.onGameWon()
+            onGameWon(roomCode);
         }
 
         // Enviar progreso a frontend
         double progress = getProgress(roomCode);
-        messagingTemplate.convertAndSend(
-                "/topic/game/" + roomCode + "/xp",
-                Map.of("progress", progress, "currentXp", currentXp)
-        );
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/xp", Map.of("progress", progress, "currentXp", currentXp));
     }
 
     public double getProgress(String roomCode) {
@@ -52,13 +37,12 @@ public class ExperienceService {
 
     public void resetRoomXp(String roomCode) {
         experienceByRoom.put(roomCode, 0);
-        messagingTemplate.convertAndSend(
-                "/topic/game/" + roomCode + "/xp",
-                Map.of("progress", 0.0, "currentXp", 0)
-        );
-        System.out.println("🔄 XP reseteado para sala " + roomCode);
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/xp", Map.of("progress", 0.0, "currentXp", 0));
     }
 
-    // ELIMINAR este método, ya que ahora usamos gamePlayServices.onGameWon()
-    // private void onGameWon(String roomCode) { ... }
+    private void onGameWon(String roomCode) {
+        System.out.println("¡La partida en " + roomCode + " se ha ganado!");
+        // Notificar a los clientes
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", Map.of("type", "GAME_WON", "roomCode", roomCode));
+    }
 }

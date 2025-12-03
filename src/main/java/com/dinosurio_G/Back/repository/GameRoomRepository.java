@@ -12,8 +12,5 @@ import java.util.Optional;
 public interface GameRoomRepository extends JpaRepository<GameRoom, Long> {
     // se encarga de buscar una sala por su código (por ejemplo, cuando un jugador quiere unirse)
     Optional<GameRoom> findByRoomCode(String roomCode);
-    // Buscar sala activa de un jugador específico
-    @Query("SELECT gr FROM GameRoom gr JOIN gr.players p " +
-            "WHERE p.playerName = :playerName AND gr.gameStarted = true")
-    Optional<GameRoom> findActiveGameByPlayerName(@Param("playerName") String playerName);
+    
 }
