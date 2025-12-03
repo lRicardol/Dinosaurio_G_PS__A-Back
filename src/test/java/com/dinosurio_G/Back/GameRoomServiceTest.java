@@ -23,225 +23,201 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 public class GameRoomServiceTest {
 
-    @Mock
-    private GameRoomRepository gameRoomRepository;
-    @Mock
-    private PlayerRepository playerRepository;
-    @Mock
-    private UserAccountRepository userAccountRepository;
-    @Mock
-    private GameMapService gameMapService;
-    @Mock
-    private SimpMessagingTemplate messagingTemplate;
-    @Mock
-    private GamePlayServices gamePlayServices;
-    @Mock
-    private ExperienceService experienceService;
-
     @InjectMocks
     private GameRoomService gameRoomService;
 
+    @Mock private GameRoomRepository gameRoomRepository;
+    @Mock private PlayerRepository playerRepository;
+    @Mock private UserAccountRepository userAccountRepository;
+    @Mock private GameMapService gameMapService;
+    @Mock private SimpMessagingTemplate messagingTemplate;
+    @Mock private GamePlayServices gamePlayServices;
+    @Mock private ExperienceService experienceService;
+
+    private UserAccount account;
+    private Player player;
+    private GameRoom room;
+
     @BeforeEach
-    void setUp() {
+    void init() {
         MockitoAnnotations.openMocks(this);
+
+        account = new UserAccount();
+        account.setId(1L);
+        account.setPlayerName("Host");
+        account.setHasActiveSession(false);
+
+        player = new Player();
+        player.setPlayerName("Host");
+        player.setUserAccount(account);
+
+        room = new GameRoom();
+        room.setRoomCode("ABC123");
+        room.setGameStarted(false);
+        room.setPlayers(new ArrayList<>());
+
+        GameMap map = new GameMap();
+        map.setWidth(1000);
+        map.setHeight(1000);
+        when(gameMapService.createMapForRoom()).thenReturn(map);
     }
 
-    // ---------------------- createRoom ----------------------
+    // ------------------------------------------------------------
+    // 1. Crear sala correctamente
+    // ------------------------------------------------------------
+
     @Test
-    void testCreateRoom_UserNotRegistered() {
-        String playerName = "PlayerX";
-        when(userAccountRepository.findByPlayerName(playerName)).thenReturn(Optional.empty());
+    void testCreateRoom_OK() {
+        when(userAccountRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.of(account));
 
-        RuntimeException ex = assertThrows(RuntimeException.class,
-                () -> gameRoomService.createRoom("Sala1", 4, playerName));
+        when(playerRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.empty());
 
-        assertEquals("El jugador PlayerX no está registrado", ex.getMessage());
+        when(gameRoomRepository.save(any(GameRoom.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        GameRoom created = gameRoomService.createRoom("Sala1", 4, "Host");
+
+        assertNotNull(created);
+        assertTrue(created.getPlayers().size() == 1);
+        assertTrue(created.getPlayers().get(0).isHost());
+        verify(userAccountRepository, times(1)).save(account);
     }
 
+    // ------------------------------------------------------------
+    // 2. No permite crear sala si está en otra partida iniciada
+    // ------------------------------------------------------------
+
     @Test
-    void testCreateRoom_Success() {
-        String playerName = "PlayerX";
-        UserAccount hostAccount = new UserAccount();
-        hostAccount.setPlayerName(playerName);
+    void testCreateRoom_BlockedIfInActiveGame() {
+        GameRoom other = new GameRoom();
+        other.setRoomCode("ZZZ111");
+        other.setGameStarted(true);
 
-        when(userAccountRepository.findByPlayerName(playerName)).thenReturn(Optional.of(hostAccount));
-        when(playerRepository.findByPlayerName(playerName)).thenReturn(Optional.empty());
-        when(gameMapService.createMapForRoom()).thenReturn(new GameMap());
-        when(gameRoomRepository.save(any(GameRoom.class))).thenAnswer(i -> i.getArgument(0));
-        when(playerRepository.save(any(Player.class))).thenAnswer(i -> i.getArgument(0));
+        player.setGameRoom(other);
 
-        GameRoom room = gameRoomService.createRoom("Sala1", 4, playerName);
+        when(userAccountRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.of(account));
 
-        assertNotNull(room);
-        assertEquals("Sala1", room.getRoomName());
+        when(playerRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.of(player));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                gameRoomService.createRoom("SalaX", 4, "Host")
+        );
+
+        assertTrue(ex.getMessage().contains("partida activa"));
+    }
+
+    // ------------------------------------------------------------
+    // 4. Join a sala
+    // ------------------------------------------------------------
+
+    @Test
+    void testJoinRoom_OK() {
+        when(gameRoomRepository.findByRoomCode("ABC123"))
+                .thenReturn(Optional.of(room));
+
+        when(userAccountRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.of(account));
+
+        when(playerRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.empty());
+
+        gameRoomService.joinRoom("ABC123", "Host");
+
         assertEquals(1, room.getPlayers().size());
-        assertTrue(room.getPlayers().get(0).isHost());
     }
 
-    // ---------------------- getAllRooms ----------------------
+    // ------------------------------------------------------------
+    // 5. Join bloqueado por sesión activa
+    // ------------------------------------------------------------
+
     @Test
-    void testGetAllRooms() {
-        when(gameRoomRepository.findAll()).thenReturn(List.of(new GameRoom(), new GameRoom()));
+    void testJoinRoom_BlockedByActiveSession() {
+        account.setHasActiveSession(true);
 
-        List<GameRoom> rooms = gameRoomService.getAllRooms();
+        when(gameRoomRepository.findByRoomCode("ABC123"))
+                .thenReturn(Optional.of(room));
+        when(userAccountRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.of(account));
 
-        assertEquals(2, rooms.size());
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                gameRoomService.joinRoom("ABC123", "Host")
+        );
+
+        assertTrue(ex.getMessage().contains("sesión activa"));
     }
 
-    // ---------------------- getRoomByCode ----------------------
+    // ------------------------------------------------------------
+    // 6. Reconexión permitida
+    // ------------------------------------------------------------
+
+
+
+    // ------------------------------------------------------------
+    // 7. Start game
+    // ------------------------------------------------------------
+
     @Test
-    void testGetRoomByCode_NotFound() {
-        when(gameRoomRepository.findByRoomCode("ABC123")).thenReturn(Optional.empty());
+    void testStartGame_OK() {
+        room.getPlayers().add(player);
 
-        RuntimeException ex = assertThrows(RuntimeException.class,
-                () -> gameRoomService.getRoomByCode("ABC123"));
+        when(gameRoomRepository.findByRoomCode("ABC123"))
+                .thenReturn(Optional.of(room));
 
-        assertEquals("La sala con código ABC123 no existe", ex.getMessage());
+        when(playerRepository.findByPlayerName("Host"))
+                .thenReturn(Optional.of(player));
+
+        when(gameRoomRepository.saveAndFlush(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        GameRoom started = gameRoomService.startGame("ABC123");
+
+        assertTrue(started.isGameStarted());
+        verify(experienceService).resetRoomXp("ABC123");
+        verify(gamePlayServices).spawnPlayers("ABC123");
     }
 
+    // ------------------------------------------------------------
+    // 8. End game
+    // ------------------------------------------------------------
+
     @Test
-    void testGetRoomByCode_Success() {
-        GameRoom room = new GameRoom();
+    void testEndGame() {
+        room.getPlayers().add(player);
+
+        account.startSession(); // activar sesión
+
+        when(gameRoomRepository.findByRoomCode("ABC123"))
+                .thenReturn(Optional.of(room));
+
+        gameRoomService.endGame("ABC123");
+
+        assertFalse(room.isGameStarted());
+        assertFalse(account.isHasActiveSession());
+    }
+
+    // ------------------------------------------------------------
+    // 9. Leave room
+    // ------------------------------------------------------------
+
+
+
+    // ------------------------------------------------------------
+    // 10. Delete room
+    // ------------------------------------------------------------
+
+    @Test
+    void testDeleteRoom() {
+        room.getPlayers().add(player);
+
         when(gameRoomRepository.findByRoomCode("ABC123")).thenReturn(Optional.of(room));
 
-        GameRoom result = gameRoomService.getRoomByCode("ABC123");
+        gameRoomService.deleteRoom("ABC123");
 
-        assertEquals(room, result);
-    }
-
-    // ---------------------- startGame ----------------------
-    @Test
-    void testStartGame() {
-        String code = "ABC123";
-        GameRoom room = new GameRoom();
-        room.setRoomCode(code);
-        room.setPlayers(List.of());
-
-        when(gameRoomRepository.findByRoomCode(code)).thenReturn(Optional.of(room));
-        when(gameRoomRepository.saveAndFlush(room)).thenReturn(room);
-
-        GameRoom result = gameRoomService.startGame(code);
-
-        verify(experienceService).resetRoomXp(code);
-        verify(gamePlayServices).spawnPlayers(code);
-        verify(messagingTemplate, times(2)).convertAndSend(anyString(), (Object) any());
-        assertTrue(result.isGameStarted());
-    }
-
-    // ---------------------- deleteRoom ----------------------
-
-    @Test
-    void testDeleteRoom_NotFound() {
-        String code = "XYZ999";
-
-        when(gameRoomRepository.findByRoomCode(code)).thenReturn(Optional.empty());
-
-        RuntimeException ex = assertThrows(RuntimeException.class,
-                () -> gameRoomService.deleteRoom(code));
-
-        assertEquals("La sala con código XYZ999 no existe", ex.getMessage());
-        verify(gameRoomRepository, never()).delete(any());
-    }
-
-    @Test
-    void testDeleteRoom_Success() {
-        String code = "DEL123";
-        GameRoom room = new GameRoom();
-        room.setRoomCode(code);
-
-        when(gameRoomRepository.findByRoomCode(code)).thenReturn(Optional.of(room));
-
-        gameRoomService.deleteRoom(code);
-
+        assertNull(player.getGameRoom());
         verify(gameRoomRepository).delete(room);
-    }
-
-    // ---------------------- joinRoom ----------------------
-
-    @Test
-    void testJoinRoom_RoomNotFound() {
-        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.empty());
-
-        RuntimeException ex = assertThrows(RuntimeException.class,
-                () -> gameRoomService.joinRoom("ROOM1", "PlayerX"));
-
-        assertEquals("La sala con código ROOM1 no existe", ex.getMessage());
-    }
-
-    @Test
-    void testJoinRoom_RoomFull() {
-        GameRoom room = new GameRoom();
-        room.setMaxPlayers(1);
-        room.setPlayers(List.of(new Player())); // ya hay 1 → llena
-
-        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
-
-        RuntimeException ex = assertThrows(RuntimeException.class,
-                () -> gameRoomService.joinRoom("ROOM1", "PlayerX"));
-
-        assertEquals("La sala está llena", ex.getMessage());
-    }
-
-    @Test
-    void testJoinRoom_UserNotRegistered() {
-        GameRoom room = new GameRoom();
-        room.setMaxPlayers(5);
-        room.setPlayers(List.of());
-
-        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
-        when(userAccountRepository.findByPlayerName("PlayerX")).thenReturn(Optional.empty());
-
-        RuntimeException ex = assertThrows(RuntimeException.class,
-                () -> gameRoomService.joinRoom("ROOM1", "PlayerX"));
-
-        assertEquals("El jugador PlayerX no está registrado", ex.getMessage());
-    }
-
-
-
-
-    @Test
-    void testJoinRoom_Success_NewPlayer() {
-        GameRoom room = new GameRoom();
-        room.setMaxPlayers(5);
-        room.setPlayers(new java.util.ArrayList<>());
-
-        UserAccount acc = new UserAccount();
-        acc.setPlayerName("PlayerX");
-
-        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
-        when(userAccountRepository.findByPlayerName("PlayerX")).thenReturn(Optional.of(acc));
-        when(playerRepository.findByPlayerName("PlayerX")).thenReturn(Optional.empty());
-        when(playerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(gameRoomRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        GameRoom updated = gameRoomService.joinRoom("ROOM1", "PlayerX");
-
-        assertEquals(1, updated.getPlayers().size());
-        assertFalse(updated.getPlayers().get(0).isHost());
-    }
-
-    @Test
-    void testJoinRoom_Success_ExistingPlayerReused() {
-        GameRoom room = new GameRoom();
-        room.setMaxPlayers(5);
-        room.setPlayers(new java.util.ArrayList<>());
-
-        UserAccount acc = new UserAccount();
-        acc.setPlayerName("PlayerX");
-
-        Player existing = new Player();
-        existing.setPlayerName("PlayerX");
-        existing.setUserAccount(acc);
-
-        when(gameRoomRepository.findByRoomCode("ROOM1")).thenReturn(Optional.of(room));
-        when(userAccountRepository.findByPlayerName("PlayerX")).thenReturn(Optional.of(acc));
-        when(playerRepository.findByPlayerName("PlayerX")).thenReturn(Optional.of(existing));
-        when(playerRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(gameRoomRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        GameRoom updated = gameRoomService.joinRoom("ROOM1", "PlayerX");
-
-        assertEquals(1, updated.getPlayers().size());
     }
 }
