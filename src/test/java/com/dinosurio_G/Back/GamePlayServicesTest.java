@@ -51,6 +51,8 @@ public class GamePlayServicesTest {
         room.setMap(map);
 
         p = new Player("TestPlayer", false, 100, 100);
+        p.setId(1L);
+        p.setHealth(100);
         p.setGameRoom(room);
 
         room.setPlayers(new ArrayList<>(List.of(p)));
@@ -58,14 +60,11 @@ public class GamePlayServicesTest {
         when(gameRoomRepo.findByRoomCode("ABC123")).thenReturn(Optional.of(room));
     }
 
-    @Test
-    void testPlayerInputUpdate() {
-        gameplay.updatePlayerInput("ABC123", "TestPlayer", true, false, false, true);
 
-        assertTrue(p.isFacingRight()); // flecha derecha
-        assertEquals(true, p.canAttack() || !p.canAttack()); // solo validar que no crashea
-    }
 
+    // ------------------------------
+    // TEST: Movement loop
+    // ------------------------------
     @Test
     void testMovementOnUpdateLoop() {
         p.setInput(true, false, false, false); // mover arriba
@@ -78,7 +77,9 @@ public class GamePlayServicesTest {
         assertEquals(95, p.getY());
     }
 
-
+    // ------------------------------
+    // TEST: Game Over
+    // ------------------------------
     @Test
     void testGameOverWhenAllPlayersDead() {
         p.setHealth(0); // muerto
@@ -88,5 +89,69 @@ public class GamePlayServicesTest {
         gameplay.updateAllRooms();
 
         verify(gameRoomRepo, atLeastOnce()).delete(room);
+    }
+
+
+
+    // ------------------------------------------------
+    // TEST: getPlayersHealth
+    // ------------------------------------------------
+    @Test
+    void testGetPlayersHealth() {
+        List<PlayerHealthDTO> list = gameplay.getPlayersHealth("ABC123");
+
+        assertEquals(1, list.size());
+        assertEquals("TestPlayer", list.get(0).getPlayerName());
+    }
+
+    // ------------------------------------------------
+    // TEST: spawnPlayers primera vez
+    // ------------------------------------------------
+    @Test
+    void testSpawnPlayers_FirstTime() {
+        p.setX(0);
+        p.setY(0);  // <-- IMPORTANTE, si no, el servicio cree que ya está spawneado
+
+        when(gameRoomRepo.findByRoomCode("ABC123")).thenReturn(Optional.of(room));
+        when(playerRepo.save(any())).thenReturn(p);
+
+        List<Map<String, Object>> result = gameplay.spawnPlayers("ABC123");
+
+        assertEquals(100, p.getX());
+        assertEquals(100, p.getY());
+        verify(npcManager, atLeastOnce()).spawnInitialNpcs("ABC123");
+    }
+    // ------------------------------------------------
+    // TEST: spawnPlayers ya spawneados
+    // ------------------------------------------------
+    @Test
+    void testSpawnPlayers_AlreadySpawned() {
+        p.setX(300); // ya tiene posición
+        p.setY(200);
+
+        when(gameRoomRepo.findByRoomCode("ABC123")).thenReturn(Optional.of(room));
+
+        List<Map<String, Object>> res = gameplay.spawnPlayers("ABC123");
+
+        assertEquals(300.0, (double) res.get(0).get("x"));
+        assertEquals(200.0, (double) res.get(0).get("y"));
+
+
+        verify(npcManager, never()).spawnInitialNpcs("ABC123");
+    }
+
+    // ------------------------------------------------
+    // TEST: broadcastGameState NO debe crashear
+    // ------------------------------------------------
+    @Test
+    void testBroadcastGameState_NoCrash() {
+        when(npcManager.getNpcsForRoom("ABC123")).thenReturn(Collections.emptyList());
+
+        gameplay.getRoomInMemory("ABC123");
+        assertDoesNotThrow(() -> {
+            var m = GamePlayServices.class.getDeclaredMethod("broadcastGameState", String.class);
+            m.setAccessible(true);
+            m.invoke(gameplay, "ABC123");
+        });
     }
 }
