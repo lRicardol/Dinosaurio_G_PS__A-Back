@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import com.dinosurio_G.Back.dto.GameRoomMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -235,29 +236,61 @@ public class GameRoomService {
 
     /**
      * Método para terminar una partida y liberar a los jugadores
+     * @param deleteRoom Si es true, elimina la sala completamente. Si es false, solo limpia jugadores.
      */
     @Transactional
-    public void endGame(String roomCode) {
+    public void endGame(String roomCode, boolean deleteRoom) {
         GameRoom room = getRoomByCode(roomCode);
 
         // Marcar partida como terminada
         room.setGameStarted(false);
 
-        // Desactivar sesiones de todos los jugadores
-        for (Player player : room.getPlayers()) {
+        // IMPORTANTE: Limpiar completamente a todos los jugadores
+        List<Player> playersToClean = new ArrayList<>(room.getPlayers());
+        for (Player player : playersToClean) {
+            // Desactivar sesión
             UserAccount account = player.getUserAccount();
             if (account != null) {
                 account.endSession();
                 userAccountRepository.save(account);
                 System.out.println("🔚 Sesión finalizada para " + player.getPlayerName());
             }
+
+            // Limpiar estado del jugador
+            player.setGameRoom(null);
+            player.setReady(false);
+            player.setHost(false);
+            player.setX(0);
+            player.setY(0);
+            player.setHealth(Player.DEFAULT_HEALTH);
+            playerRepository.save(player);
+            System.out.println("🧹 Jugador " + player.getPlayerName() + " limpiado completamente");
         }
 
-        gameRoomRepository.save(room);
+        // Limpiar la lista de jugadores de la sala
+        room.getPlayers().clear();
+
+        if (deleteRoom) {
+            // Eliminar la sala completamente
+            gameRoomRepository.delete(room);
+            System.out.println("🗑️ Sala " + roomCode + " eliminada completamente");
+        } else {
+            // Solo guardar sala vacía
+            gameRoomRepository.save(room);
+            System.out.println("✅ Partida " + roomCode + " terminada y jugadores liberados");
+        }
 
         // Notificar a los clientes
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event",
                 Map.of("type", "GAME_ENDED", "roomCode", roomCode));
+    }
+
+    /**
+     * Sobrecarga para mantener compatibilidad - por defecto NO elimina la sala
+     */
+    @Transactional
+    public void endGame(String roomCode) {
+        endGame(roomCode, false);
     }
 
     /**
@@ -278,9 +311,13 @@ public class GameRoomService {
 
         if (player.getGameRoom() != null && player.getGameRoom().getId().equals(room.getId())) {
             room.getPlayers().remove(player);
+
+            // Limpiar completamente el jugador
             player.setGameRoom(null);
             player.setReady(false);
             player.setHost(false);
+            player.setX(0);
+            player.setY(0);
 
             // Desactivar sesión
             UserAccount account = player.getUserAccount();
@@ -292,7 +329,7 @@ public class GameRoomService {
             playerRepository.save(player);
             gameRoomRepository.save(room);
 
-            System.out.println("👋 " + playerName + " salió de la sala " + roomCode);
+            System.out.println("👋 " + playerName + " salió de la sala " + roomCode + " y fue limpiado");
         }
     }
 
@@ -301,18 +338,25 @@ public class GameRoomService {
     public void deleteRoom(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
 
-        // Liberar a todos los jugadores
+        // Liberar y limpiar a todos los jugadores
         for (Player player : room.getPlayers()) {
+            // Desactivar sesión
             UserAccount account = player.getUserAccount();
             if (account != null) {
                 account.endSession();
                 userAccountRepository.save(account);
             }
+
+            // Limpiar completamente el jugador
             player.setGameRoom(null);
+            player.setReady(false);
+            player.setHost(false);
+            player.setX(0);
+            player.setY(0);
             playerRepository.save(player);
         }
 
         gameRoomRepository.delete(room);
-        System.out.println("🗑️ Sala " + roomCode + " eliminada");
+        System.out.println("🗑️ Sala " + roomCode + " eliminada y todos los jugadores liberados");
     }
 }

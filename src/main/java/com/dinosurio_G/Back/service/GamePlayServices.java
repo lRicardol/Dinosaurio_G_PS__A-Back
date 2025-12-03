@@ -46,6 +46,9 @@ public class GamePlayServices {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private GameRoomService gameRoomService;
+
     // Caché de salas en memoria para mantener el estado de inputs
     private final Map<String, GameRoom> roomCache = new ConcurrentHashMap<>();
 
@@ -429,46 +432,28 @@ public class GamePlayServices {
     }
 
     private void onGameLost(String roomCode) {
-        GameRoom room = getOrLoadRoom(roomCode);
+        System.out.println("💀 GAME OVER en sala " + roomCode + " - Todos los jugadores murieron");
 
-        // Limpiar jugadores y desactivar sesiones
-        for (Player p : room.getPlayers()) {
-            // Desactivar sesión del UserAccount
-            if (p.getUserAccount() != null) {
-                p.getUserAccount().endSession();
-                playerRepository.save(p);  // Esto también guarda el UserAccount en cascada
-                System.out.println(" Sesión desactivada para " + p.getPlayerName());
-            }
+        // Limpiar sala del caché primero
+        roomCache.remove(roomCode);
 
-            p.setReady(false);
-            p.setHealth(Player.DEFAULT_HEALTH);
-            p.setX(0);
-            p.setY(0);
-            p.setHost(false);
-            p.setGameRoom(null);
-            playerRepository.save(p);
-        }
-
-        room.getPlayers().clear();
+        // Resetear XP
         experienceService.resetRoomXp(roomCode);
 
-        // Notificar Game Over
+        // Notificar Game Over a los clientes
         Map<String, Object> event = new HashMap<>();
         event.put("type", "GAME_OVER");
         event.put("roomCode", roomCode);
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
 
-        System.out.println(" GAME OVER en sala " + roomCode + " - Jugadores desvinculados");
-
-        // Limpiar sala del caché
-        roomCache.remove(roomCode);
-
-        // Eliminar la sala de la base de datos
+        // Usar el método centralizado para terminar la partida
+        // true = eliminar sala completamente
         try {
-            gameRoomRepository.delete(room);
-            System.out.println("️ Sala " + roomCode + " eliminada de la base de datos");
+            gameRoomService.endGame(roomCode, true);
+            System.out.println("✅ Partida " + roomCode + " terminada y sala eliminada correctamente");
         } catch (Exception e) {
-            System.err.println("Error eliminando sala: " + e.getMessage());
+            System.err.println("❌ Error terminando partida: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
