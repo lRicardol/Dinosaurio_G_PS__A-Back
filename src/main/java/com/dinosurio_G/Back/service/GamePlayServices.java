@@ -418,6 +418,103 @@ public class GamePlayServices {
         }
     }
 
+    private void onGameLost(String roomCode) {
+        GameRoom room = getOrLoadRoom(roomCode);
+
+        System.out.println("💀 GAME OVER en sala " + roomCode);
+
+        // 1. PRIMERO: Desactivar sesiones (esto es crítico)
+        for (Player p : room.getPlayers()) {
+            if (p.getUserAccount() != null) {
+                UserAccount account = p.getUserAccount();
+                account.endSession(); // Esto pone hasActiveSession = false
+                System.out.println("🔓 Sesión desactivada para " + p.getPlayerName() +
+                        " (hasActiveSession: " + account.isHasActiveSession() + ")");
+            }
+
+            // 2. Resetear propiedades del jugador
+            p.setReady(false);
+            p.setHealth(Player.DEFAULT_HEALTH);
+            p.setX(0);
+            p.setY(0);
+            p.setHost(false);
+            p.setGameRoom(null);
+
+            // 3. Guardar DESPUÉS de modificar UserAccount
+            playerRepository.save(p);
+        }
+
+        // 4. Limpiar lista de jugadores
+        room.getPlayers().clear();
+
+        // 5. Resetear XP
+        experienceService.resetRoomXp(roomCode);
+
+        // 6. Notificar Game Over
+        Map<String, Object> event = new HashMap<>();
+        event.put("type", "GAME_OVER");
+        event.put("roomCode", roomCode);
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
+
+        System.out.println("✅ GAME OVER procesado - Jugadores desvinculados");
+
+        // 7. Limpiar sala del caché
+        roomCache.remove(roomCode);
+
+        // 8. Eliminar la sala de la base de datos
+        try {
+            gameRoomRepository.delete(room);
+            System.out.println("🗑️ Sala " + roomCode + " eliminada de la base de datos");
+        } catch (Exception e) {
+            System.err.println("❌ Error eliminando sala: " + e.getMessage());
+        }
+    }
+
+    // AGREGAR método para victoria (cuando ganas)
+    @Transactional
+    public void onGameWon(String roomCode) {
+        GameRoom room = getOrLoadRoom(roomCode);
+
+        System.out.println("🎉 VICTORIA en sala " + roomCode);
+
+        // 1. PRIMERO: Desactivar sesiones
+        for (Player p : room.getPlayers()) {
+            if (p.getUserAccount() != null) {
+                UserAccount account = p.getUserAccount();
+                account.endSession();
+                System.out.println("🔓 Sesión desactivada para " + p.getPlayerName() +
+                        " (hasActiveSession: " + account.isHasActiveSession() + ")");
+            }
+
+            // 2. Resetear jugador pero mantenerlo en sala
+            p.setReady(false);
+            p.setHealth(Player.DEFAULT_HEALTH);
+            p.setX(0);
+            p.setY(0);
+
+            playerRepository.save(p);
+        }
+
+        // 3. Marcar partida como terminada
+        room.setGameStarted(false);
+        gameRoomRepository.save(room);
+
+        // 4. Resetear XP
+        experienceService.resetRoomXp(roomCode);
+
+        // 5. Notificar victoria
+        Map<String, Object> event = new HashMap<>();
+        event.put("type", "GAME_WON");
+        event.put("roomCode", roomCode);
+        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
+
+        // 6. Limpiar sala del caché
+        roomCache.remove(roomCode);
+
+        System.out.println("✅ Victoria procesada - Jugadores liberados");
+    }
+
+    // AGREGAR verificación en checkGameOver
     private void checkGameOver(String roomCode) {
         GameRoom room = getOrLoadRoom(roomCode);
 
@@ -425,51 +522,8 @@ public class GamePlayServices {
                 .allMatch(p -> !p.isAlive());
 
         if (allDead) {
+            System.out.println("⚠️ Todos los jugadores muertos - Ejecutando Game Over");
             onGameLost(roomCode);
-        }
-    }
-
-    private void onGameLost(String roomCode) {
-        GameRoom room = getOrLoadRoom(roomCode);
-
-        // Limpiar jugadores y desactivar sesiones
-        for (Player p : room.getPlayers()) {
-            // Desactivar sesión del UserAccount
-            if (p.getUserAccount() != null) {
-                p.getUserAccount().endSession();
-                playerRepository.save(p);  // Esto también guarda el UserAccount en cascada
-                System.out.println(" Sesión desactivada para " + p.getPlayerName());
-            }
-
-            p.setReady(false);
-            p.setHealth(Player.DEFAULT_HEALTH);
-            p.setX(0);
-            p.setY(0);
-            p.setHost(false);
-            p.setGameRoom(null);
-            playerRepository.save(p);
-        }
-
-        room.getPlayers().clear();
-        experienceService.resetRoomXp(roomCode);
-
-        // Notificar Game Over
-        Map<String, Object> event = new HashMap<>();
-        event.put("type", "GAME_OVER");
-        event.put("roomCode", roomCode);
-        messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
-
-        System.out.println(" GAME OVER en sala " + roomCode + " - Jugadores desvinculados");
-
-        // Limpiar sala del caché
-        roomCache.remove(roomCode);
-
-        // Eliminar la sala de la base de datos
-        try {
-            gameRoomRepository.delete(room);
-            System.out.println("️ Sala " + roomCode + " eliminada de la base de datos");
-        } catch (Exception e) {
-            System.err.println("Error eliminando sala: " + e.getMessage());
         }
     }
 
