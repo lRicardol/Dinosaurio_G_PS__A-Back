@@ -100,4 +100,8 @@ public class GameRoom {
 
     public void setMap(GameMap map) {this.map=map;
     }
+
+    public void setId(long l) {
+        this.id = id;
+    }
 }

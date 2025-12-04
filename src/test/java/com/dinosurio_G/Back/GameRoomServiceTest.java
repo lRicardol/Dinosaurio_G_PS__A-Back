@@ -220,4 +220,24 @@ public class GameRoomServiceTest {
         assertNull(player.getGameRoom());
         verify(gameRoomRepository).delete(room);
     }
+
+
+    // ------------------------------------------------------------
+// 9b. Leave room bloqueado si partida inició
+// ------------------------------------------------------------
+    @Test
+    void testLeaveRoom_BlockedIfGameStarted() {
+        room.setGameStarted(true);
+        room.getPlayers().add(player);
+        player.setGameRoom(room);
+
+        when(gameRoomRepository.findByRoomCode("ABC123")).thenReturn(Optional.of(room));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> gameRoomService.leaveRoom("ABC123", "Host"));
+
+        assertTrue(ex.getMessage().contains("No puedes salir de una partida"));
+    }
+
+
 }

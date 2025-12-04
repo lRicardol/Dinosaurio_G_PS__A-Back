@@ -59,6 +59,4 @@ public class ExperienceService {
         System.out.println("🔄 XP reseteado para sala " + roomCode);
     }
 
-    // ELIMINAR este método, ya que ahora usamos gamePlayServices.onGameWon()
-    // private void onGameWon(String roomCode) { ... }
 }
