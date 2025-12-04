@@ -48,7 +48,7 @@ public class GamePlayServices {
 
 
     // Caché de salas en memoria para mantener el estado de inputs
-    private final Map<String, GameRoom> roomCache = new ConcurrentHashMap<>();
+    public final Map<String, GameRoom> roomCache = new ConcurrentHashMap<>();
 
     // Actualizar input del jugador (desde frontend)
     public void updatePlayerInput(String roomCode, String playerName,

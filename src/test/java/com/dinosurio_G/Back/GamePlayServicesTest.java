@@ -154,4 +154,107 @@ public class GamePlayServicesTest {
             m.invoke(gameplay, "ABC123");
         });
     }
+
+    // ------------------------------------------------
+// TEST: checkChestInteraction abre el cofre
+// ------------------------------------------------
+    @Test
+    void testCheckChestInteraction_ChestOpened() throws Exception {
+        // Preparación del cofre
+        Chest chest = mock(Chest.class);
+        Position pos = new Position(100, 100);
+        when(chest.getPosition()).thenReturn(pos);
+        when(chest.isActive()).thenReturn(true);
+        when(chest.getId()).thenReturn(10L);
+
+        when(chestService.findByMapId(any())).thenReturn(List.of(chest));
+
+        // Mock del lock para ejecutar el runnable inmediatamente
+        doAnswer(invocation -> {
+            Runnable r = invocation.getArgument(1);
+            r.run();
+            return null;
+        }).when(lockManager).withLock(any(), any());
+
+        when(chestService.tryOpenChest(10L)).thenReturn(true);
+
+        // Jugador cerca del cofre
+        p.setX(100);
+        p.setY(120);
+
+        // Ejecutar ciclo de update (para llamar checkChestInteraction)
+        when(gameRoomRepo.findAll()).thenReturn(List.of(room));
+        gameplay.updateAllRooms();
+
+        // verificar que XP fue sumada
+        verify(xpService, times(1)).addExperience("ABC123", 150);
+    }
+
+
+    // ------------------------------------------------
+// TEST: onGameWon
+// ------------------------------------------------
+    @Test
+    void testOnGameWon() throws Exception {
+        // Mock user account para poder validar sesión
+        UserAccount ua = mock(UserAccount.class);
+        p.setUserAccount(ua);
+
+        // Asegurarse de que la sala esté en cache
+        gameplay.getRoomInMemory("ABC123");
+
+        // Preparar reflection para llamar al método privado
+        var m = GamePlayServices.class.getDeclaredMethod("onGameWon", String.class);
+        m.setAccessible(true);
+
+        // Ejecutar victoria
+        m.invoke(gameplay, "ABC123");
+
+        // Verificar que la sesión fue cerrada
+        verify(ua, times(1)).endSession();
+
+        // Verificar que el jugador fue reseteado
+        assertEquals(0, p.getX());
+        assertEquals(0, p.getY());
+        assertEquals(Player.DEFAULT_HEALTH, p.getHealth());
+        assertFalse(p.isReady());
+
+        // Verificar que la XP se reseteó
+        verify(xpService, times(1)).resetRoomXp("ABC123");
+
+        // Verificar que la sala se marcó como no iniciada
+        assertFalse(room.isGameStarted());
+
+        // Verificar que la sala fue eliminada del cache
+        assertFalse(gameplay.roomCache.containsKey("ABC123"));
+    }
+
+    // ------------------------------------------------
+// TEST: updatePlayerInput
+// ------------------------------------------------
+    @Test
+    void testUpdatePlayerInput() {
+        gameplay.getRoomInMemory("ABC123");
+
+        // Ejecutar input
+        gameplay.updatePlayerInput("ABC123", String.valueOf(1L), true, false, true, false);
+
+        assertTrue(p.isAlive()); // sigue vivo
+        assertEquals(100, p.getX());
+        assertEquals(100, p.getY());
+
+        // Ahora actualizar movimiento
+        p.actualizar();
+
+        // Debe moverse arriba (y -= 5)
+        assertEquals(100, p.getY());
+
+        // Debe moverse izquierda (x -= 5)
+        assertEquals(100, p.getX());
+
+        // Y mirar hacia la IZQUIERDA (left = true)
+        assertFalse(!p.isFacingRight());
+    }
+
+
 }

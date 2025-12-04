@@ -64,4 +64,57 @@ public class UserAccountTest {
         assertTrue(str.contains("test2@example.com"));
         assertTrue(str.contains("PlayerZ"));
     }
+
+    @Test
+    void testUpdateActivity() {
+        UserAccount user = new UserAccount();
+        LocalDateTime before = user.getLastActivity(); // Puede ser null
+
+        try { Thread.sleep(5); } catch (InterruptedException ignored) {}
+
+        user.updateActivity();
+        assertNotNull(user.getLastActivity());
+
+        if (before != null) {
+            assertTrue(user.getLastActivity().isAfter(before));
+        }
+    }
+
+    @Test
+    void testStartSession() {
+        UserAccount user = new UserAccount();
+        assertFalse(user.isHasActiveSession());
+
+        user.startSession();
+
+        assertTrue(user.isHasActiveSession());
+        assertNotNull(user.getLastActivity());
+    }
+
+    @Test
+    void testEndSession() {
+        UserAccount user = new UserAccount();
+        user.startSession();
+
+        assertTrue(user.isHasActiveSession());
+
+        user.endSession();
+        assertFalse(user.isHasActiveSession());
+    }
+
+    @Test
+    void testLastActivityUpdatesOnStartSession() {
+        UserAccount user = new UserAccount();
+        LocalDateTime before = user.getLastActivity(); // Puede ser null
+
+        try { Thread.sleep(5); } catch (InterruptedException ignored) {}
+
+        user.startSession();
+        assertNotNull(user.getLastActivity());
+
+        if (before != null) {
+            assertTrue(user.getLastActivity().isAfter(before));
+        }
+    }
+
 }
