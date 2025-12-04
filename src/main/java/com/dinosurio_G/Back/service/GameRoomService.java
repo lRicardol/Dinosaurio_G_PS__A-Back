@@ -1,5 +1,6 @@
 package com.dinosurio_G.Back.service;
 
+import com.dinosurio_G.Back.exception.GameConflictException;
 import com.dinosurio_G.Back.model.*;
 import com.dinosurio_G.Back.repository.GameRoomRepository;
 import com.dinosurio_G.Back.repository.PlayerRepository;
@@ -57,12 +58,12 @@ public class GameRoomService {
 
             // Si la sala actual está en juego, no permitir crear nueva sala
             if (currentRoom.isGameStarted()) {
-                throw new RuntimeException("No puedes crear una sala mientras estás en una partida activa. " +
+                throw new GameConflictException("No puedes crear una sala mientras estás en una partida activa. " +
                         "Termina tu partida actual primero (Sala: " + currentRoom.getRoomCode() + ")");
             }
 
             // Si la sala no está iniciada, limpiar automáticamente
-            System.out.println("⚠️ Limpiando sala anterior (no iniciada) para " + playerName);
+            System.out.println(" Limpiando sala anterior (no iniciada) para " + playerName);
             existingPlayer.setGameRoom(null);
             existingPlayer.setReady(false);
             existingPlayer.setHost(false);
@@ -104,7 +105,7 @@ public class GameRoomService {
         // ACTIVAR SESIÓN al crear sala
         hostAccount.startSession();
         userAccountRepository.save(hostAccount);
-        System.out.println("✅ Sesión activada para " + playerName);
+        System.out.println(" Sesión activada para " + playerName);
 
         return gameRoomRepository.save(savedRoom);
     }
@@ -150,25 +151,25 @@ public class GameRoomService {
 
             // Si está en la misma sala, permitir (reconexión)
             if (currentRoom.getId().equals(room.getId())) {
-                System.out.println("🔄 Reconexión de " + playerName + " a la sala " + roomCode);
+                System.out.println(" Reconexión de " + playerName + " a la sala " + roomCode);
                 return gameRoomRepository.save(room);
             }
 
             // Si está en otra sala y esa sala está en juego, bloquear
             if (currentRoom.isGameStarted()) {
-                throw new RuntimeException("Ya estás en una partida activa (Sala: " +
+                throw new GameConflictException("Ya estás en una partida activa (Sala: " +
                         currentRoom.getRoomCode() + "). Termina tu partida actual antes de unirte a otra.");
             }
 
             // Si está en otra sala que NO ha empezado, limpiar automáticamente
-            System.out.println("⚠️ Limpiando sala anterior (no iniciada) para " + playerName);
+            System.out.println(" Limpiando sala anterior (no iniciada) para " + playerName);
             currentRoom.getPlayers().remove(player);
             gameRoomRepository.save(currentRoom);
         }
 
         // VALIDACIÓN ANTI-SUPLANTACIÓN: Verificar si tiene sesión activa
         if (userAccount.isHasActiveSession()) {
-            throw new RuntimeException("Esta cuenta ya tiene una sesión activa en otro dispositivo. " +
+            throw new GameConflictException("Esta cuenta ya tiene una sesión activa en otro dispositivo. " +
                     "Cierra la otra sesión primero.");
         }
 
@@ -188,7 +189,7 @@ public class GameRoomService {
             // ACTIVAR SESIÓN al unirse a sala
             userAccount.startSession();
             userAccountRepository.save(userAccount);
-            System.out.println("✅ Sesión activada para " + playerName);
+            System.out.println(" Sesión activada para " + playerName);
         }
 
         return gameRoomRepository.save(room);
@@ -206,7 +207,7 @@ public class GameRoomService {
             if (dbPlayer.getGameRoom() != null &&
                     !dbPlayer.getGameRoom().getId().equals(room.getId()) &&
                     dbPlayer.getGameRoom().isGameStarted()) {
-                throw new RuntimeException("El jugador " + player.getPlayerName() +
+                throw new GameConflictException("El jugador " + player.getPlayerName() +
                         " está en otra partida activa. No se puede iniciar el juego.");
             }
         }
@@ -220,7 +221,7 @@ public class GameRoomService {
         // 3) marcamos la sala como iniciada y persistimos
         room.setGameStarted(true);
         GameRoom saved = gameRoomRepository.saveAndFlush(room);
-        System.out.println("🎮 GAME STARTED? -> " + saved.isGameStarted());
+        System.out.println(" GAME STARTED? -> " + saved.isGameStarted());
 
         // 4) Notificar a todos los clientes que la partida empezó
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event",
@@ -249,7 +250,7 @@ public class GameRoomService {
             if (account != null) {
                 account.endSession();
                 userAccountRepository.save(account);
-                System.out.println("🔚 Sesión finalizada para " + player.getPlayerName());
+                System.out.println(" Sesión finalizada para " + player.getPlayerName());
             }
         }
 
@@ -292,7 +293,7 @@ public class GameRoomService {
             playerRepository.save(player);
             gameRoomRepository.save(room);
 
-            System.out.println("👋 " + playerName + " salió de la sala " + roomCode);
+            System.out.println(" " + playerName + " salió de la sala " + roomCode);
         }
     }
 
@@ -313,6 +314,6 @@ public class GameRoomService {
         }
 
         gameRoomRepository.delete(room);
-        System.out.println("🗑️ Sala " + roomCode + " eliminada");
+        System.out.println(" Sala " + roomCode + " eliminada");
     }
 }
