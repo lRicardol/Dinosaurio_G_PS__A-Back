@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,9 +45,10 @@ public class GamePlayServices {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private DistributedCacheService distributedCache; //  NUEVO
 
-    // Caché de salas en memoria para mantener el estado de inputs
-    public final Map<String, GameRoom> roomCache = new ConcurrentHashMap<>();
+    //  ELIMINADO: public final Map<String, GameRoom> roomCache = new ConcurrentHashMap<>();
 
     // Actualizar input del jugador (desde frontend)
     public void updatePlayerInput(String roomCode, String playerName,
@@ -60,115 +60,96 @@ public class GamePlayServices {
                 .findFirst()
                 .ifPresent(player -> {
                     player.setInput(arriba, abajo, izquierda, derecha);
-                    System.out.println("✓ Input actualizado para " + playerName + ": " +
-                            (arriba?"↑":"") + (abajo?"↓":"") +
-                            (izquierda?"←":"") + (derecha?"→":""));
                 });
+
+        // Guardar en Redis
+        distributedCache.saveRoom(roomCode, room);
     }
 
-    // Obtener o cargar sala en caché
+    // Obtener o cargar sala desde Redis o DB
     private GameRoom getOrLoadRoom(String roomCode) {
-        return roomCache.computeIfAbsent(roomCode, code -> {
-            GameRoom room = gameRoomRepository.findByRoomCode(code)
-                    .orElseThrow(() -> new RuntimeException("La sala con código " + code + " no existe"));
-            System.out.println("✓ Sala " + roomCode + " cargada en memoria");
-            return room;
-        });
+        // 1. Intentar desde Redis
+        GameRoom cached = distributedCache.getRoom(roomCode);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 2. Cargar desde DB
+        GameRoom room = gameRoomRepository.findByRoomCode(roomCode)
+                .orElseThrow(() -> new RuntimeException("Sala no encontrada: " + roomCode));
+
+        // 3. Guardar en Redis
+        distributedCache.saveRoom(roomCode, room);
+
+        return room;
     }
 
-    // Loop global del juego (cada 50 ms) - CORREGIDO
+    // Loop global del juego (cada 50 ms)
     @Transactional
     @Scheduled(fixedRate = 50)
     public void updateAllRooms() {
-        // Recargar salas activas desde DB
         List<GameRoom> activeRooms = gameRoomRepository.findAll().stream()
                 .filter(GameRoom::isGameStarted)
                 .collect(Collectors.toList());
 
-        // Actualizar caché con salas activas
-        activeRooms.forEach(room -> {
-            String roomCode = room.getRoomCode();
-            GameRoom cachedRoom = roomCache.get(roomCode);
+        activeRooms.forEach(dbRoom -> {
+            String roomCode = dbRoom.getRoomCode();
 
-            if (cachedRoom != null) {
-                // Mantener inputs de la caché, actualizar resto desde DB
-                syncRoomFromDb(cachedRoom, room);
-            } else {
-                roomCache.put(roomCode, room);
-            }
-        });
+            // Obtener desde Redis o cargar
+            GameRoom room = getOrLoadRoom(roomCode);
 
-        // Procesar cada sala en caché
-        roomCache.values().forEach(room -> {
+            // Sincronizar propiedades desde DB
+            room.setGameStarted(dbRoom.isGameStarted());
+            room.setMap(dbRoom.getMap());
+
             if (!room.isGameStarted()) return;
 
-            // 1. Actualizar movimiento (usa inputs en memoria)
+            // 1. Actualizar movimiento
             for (Player player : room.getPlayers()) {
                 if (player.isAlive()) {
                     player.actualizar();
                 }
             }
 
-            // 2. Persistir posiciones actualizadas
+            // 2. Persistir posiciones
             for (Player player : room.getPlayers()) {
                 if (player.isAlive()) {
                     playerRepository.save(player);
                 }
             }
 
-            // 3. Revisar interacción con cofres
+            // 3. Revisar cofres
             for (Player player : room.getPlayers()) {
                 if (player.isAlive()) {
                     checkChestInteraction(room, player);
                 }
             }
 
-            // 4. Ejecutar ataques automáticos por jugador
+            // 4. Ataques automáticos
             for (Player player : room.getPlayers()) {
                 if (player.isAlive()) {
                     long now = System.currentTimeMillis();
                     if (now - player.getLastAttackTime() >= 1500) {
-                        playerWhipAttack(room.getRoomCode(), player.getPlayerName());
+                        playerWhipAttack(roomCode, player.getPlayerName());
                     }
                 }
             }
 
-            // 5. Verificar si la partida se ha perdido
-            checkGameOver(room.getRoomCode());
+            // 5. Verificar game over
+            checkGameOver(roomCode);
 
-            // 6. Enviar estado actualizado al frontend
-            broadcastGameState(room.getRoomCode());
+            // 6. Enviar estado
+            broadcastGameState(roomCode);
+
+            // 7. Guardar en Redis
+            distributedCache.saveRoom(roomCode, room);
         });
-
-        // Limpiar salas inactivas del caché
-        roomCache.entrySet().removeIf(entry -> !entry.getValue().isGameStarted());
     }
 
-    // Sincronizar datos de DB manteniendo inputs
-    private void syncRoomFromDb(GameRoom cachedRoom, GameRoom dbRoom) {
-        // Actualizar propiedades de la sala
-        cachedRoom.setGameStarted(dbRoom.isGameStarted());
-        cachedRoom.setMap(dbRoom.getMap());
-
-        // Sincronizar jugadores manteniendo inputs
-        for (Player dbPlayer : dbRoom.getPlayers()) {
-            cachedRoom.getPlayers().stream()
-                    .filter(p -> p.getId().equals(dbPlayer.getId()))
-                    .findFirst()
-                    .ifPresent(cachedPlayer -> {
-                        // Actualizar propiedades persistidas
-                        cachedPlayer.setHealth(dbPlayer.getHealth());
-                        // NO actualizar x, y ni inputs (se mantienen en memoria)
-                    });
-        }
-    }
-
-    // Enviar estado del juego al frontend vía WebSocket
     private void broadcastGameState(String roomCode) {
         try {
             GameRoom room = getOrLoadRoom(roomCode);
 
-            // Preparar datos de jugadores
             List<Map<String, Object>> playersData = room.getPlayers().stream()
                     .map(p -> {
                         Map<String, Object> playerData = new HashMap<>();
@@ -183,7 +164,6 @@ public class GamePlayServices {
                     })
                     .collect(Collectors.toList());
 
-            // Preparar datos de NPCs
             List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
             List<Map<String, Object>> npcsData = npcs.stream()
                     .filter(npc -> !npc.isDead())
@@ -197,13 +177,11 @@ public class GamePlayServices {
                     })
                     .collect(Collectors.toList());
 
-            // Crear payload
             Map<String, Object> gameState = new HashMap<>();
             gameState.put("players", playersData);
             gameState.put("npcs", npcsData);
             gameState.put("timestamp", System.currentTimeMillis());
 
-            // Enviar por WebSocket
             messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/state", gameState);
 
         } catch (Exception e) {
@@ -211,12 +189,10 @@ public class GamePlayServices {
         }
     }
 
-    // Determinar dirección del jugador
     private String determineDirection(Player player) {
         return player.isFacingRight() ? "right" : "left";
     }
 
-    // Obtener vida actual de los jugadores
     public List<PlayerHealthDTO> getPlayersHealth(String roomCode) {
         GameRoom room = getOrLoadRoom(roomCode);
         return room.getPlayers().stream()
@@ -229,13 +205,11 @@ public class GamePlayServices {
                 .collect(Collectors.toList());
     }
 
-    // Utilidad interna
     private GameRoom getRoomByCode(String roomCode) {
         return gameRoomRepository.findByRoomCode(roomCode)
-                .orElseThrow(() -> new RuntimeException("La sala con código " + roomCode + " no existe"));
+                .orElseThrow(() -> new RuntimeException("Sala no encontrada: " + roomCode));
     }
 
-    // Sumar XP al room
     public void addExperience(String roomCode, int amount) {
         experienceService.addExperience(roomCode, amount);
     }
@@ -244,12 +218,10 @@ public class GamePlayServices {
         return experienceService.getProgress(roomCode);
     }
 
-    // Spawn de jugadores + NPCs
     public List<Map<String, Object>> spawnPlayers(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
         List<Player> players = room.getPlayers();
 
-        // Verificar si ya fueron spawneados
         boolean alreadySpawned = players.stream()
                 .anyMatch(p -> p.getX() != 0 || p.getY() != 0);
 
@@ -284,10 +256,9 @@ public class GamePlayServices {
                     " en (" + (int)player.getX() + ", " + (int)player.getY() + ")");
         }
 
-        // Cargar sala en caché después del spawn
-        roomCache.put(roomCode, room);
+        // Guardar en Redis
+        distributedCache.saveRoom(roomCode, room);
 
-        // Spawnear NPCs después
         npcManager.spawnInitialNpcs(roomCode);
         gameRoomRepository.save(room);
 
@@ -308,17 +279,13 @@ public class GamePlayServices {
     }
 
     public synchronized void playerWhipAttack(String roomCode, String playerName) {
-        System.out.println(" Ejecutando ataque de " + playerName + " en sala " + roomCode);
         GameRoom room = getOrLoadRoom(roomCode);
         Player player = room.getPlayers().stream()
                 .filter(p -> p.getPlayerName().equals(playerName))
                 .findFirst()
                 .orElse(null);
 
-        if (player == null || !player.isAlive()) {
-            System.out.println(" Jugador no válido para atacar");
-            return;
-        }
+        if (player == null || !player.isAlive()) return;
 
         final double RANGE = 80.0;
         final double HEIGHT = 100.0;
@@ -328,14 +295,7 @@ public class GamePlayServices {
         double py = player.getY();
 
         List<NPC> npcs = npcManager.getNpcsForRoom(roomCode);
-
-        if (npcs == null || npcs.isEmpty()) {
-            System.out.println(" No hay NPCs en la sala " + roomCode);
-            return;
-        }
-
-        boolean hitSomething = false;
-        int npcsHit = 0;
+        if (npcs == null || npcs.isEmpty()) return;
 
         for (NPC npc : npcs) {
             if (npc.isDead()) continue;
@@ -343,45 +303,26 @@ public class GamePlayServices {
             double nx = npc.getX();
             double ny = npc.getY();
 
-            // Calcular hitbox según dirección
             boolean inRange;
             if (player.isFacingRight()) {
-                // Atacando hacia la derecha: de px hasta px+RANGE
                 inRange = nx >= px && nx <= (px + RANGE) &&
                         ny >= (py - HEIGHT / 2) && ny <= (py + HEIGHT / 2);
             } else {
-                // Atacando hacia la izquierda: de px-RANGE hasta px
                 inRange = nx <= px && nx >= (px - RANGE) &&
                         ny >= (py - HEIGHT / 2) && ny <= (py + HEIGHT / 2);
             }
 
             if (inRange) {
-                hitSomething = true;
-                npcsHit++;
-
                 boolean killed = npc.receiveDamage(DAMAGE, player.getPlayerName());
 
                 if (killed) {
-                    System.out.println(" " + playerName + " MATÓ un NPC #" + npc.getId());
-
                     Map<String, Object> event = new HashMap<>();
                     event.put("type", "NPC_KILLED");
                     event.put("npcId", npc.getId());
                     event.put("killedBy", playerName);
                     messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
-                } else {
-                    System.out.println(" " + playerName + " golpeó NPC #" + npc.getId() +
-                            " (HP: " + npc.getHealth() + "/" + DAMAGE + " daño)");
                 }
             }
-        }
-
-        if (hitSomething) {
-            System.out.println(" " + playerName + " impactó " + npcsHit + " NPC(s)");
-        } else {
-            System.out.println(" " + playerName + " no golpeó nada (Dir: " +
-                    (player.isFacingRight() ? "→" : "←") +
-                    ", Pos: " + (int)px + "," + (int)py + ")");
         }
     }
 
@@ -405,7 +346,6 @@ public class GamePlayServices {
                     boolean opened = chestService.tryOpenChest(chest.getId());
                     if (opened) {
                         addExperience(room.getRoomCode(), CHEST_REWARD_XP);
-                        System.out.println("📦 " + player.getPlayerName() + " abrió un cofre!");
 
                         Map<String, Object> event = new HashMap<>();
                         event.put("type", "CHEST_OPENED");
@@ -421,100 +361,69 @@ public class GamePlayServices {
     private void onGameLost(String roomCode) {
         GameRoom room = getOrLoadRoom(roomCode);
 
-        System.out.println("💀 GAME OVER en sala " + roomCode);
-
-        // 1. PRIMERO: Desactivar sesiones (esto es crítico)
         for (Player p : room.getPlayers()) {
             if (p.getUserAccount() != null) {
                 UserAccount account = p.getUserAccount();
-                account.endSession(); // Esto pone hasActiveSession = false
-                System.out.println("🔓 Sesión desactivada para " + p.getPlayerName() +
-                        " (hasActiveSession: " + account.isHasActiveSession() + ")");
+                account.endSession();
+                distributedCache.endSession(p.getPlayerName()); //  Redis
             }
 
-            // 2. Resetear propiedades del jugador
             p.setReady(false);
             p.setHealth(Player.DEFAULT_HEALTH);
             p.setX(0);
             p.setY(0);
             p.setHost(false);
             p.setGameRoom(null);
-
-            // 3. Guardar DESPUÉS de modificar UserAccount
             playerRepository.save(p);
         }
 
-        // 4. Limpiar lista de jugadores
         room.getPlayers().clear();
-
-        // 5. Resetear XP
         experienceService.resetRoomXp(roomCode);
 
-        // 6. Notificar Game Over
         Map<String, Object> event = new HashMap<>();
         event.put("type", "GAME_OVER");
         event.put("roomCode", roomCode);
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
 
-        System.out.println("✅ GAME OVER procesado - Jugadores desvinculados");
+        distributedCache.deleteRoom(roomCode); //  Redis
 
-        // 7. Limpiar sala del caché
-        roomCache.remove(roomCode);
-
-        // 8. Eliminar la sala de la base de datos
         try {
             gameRoomRepository.delete(room);
-            System.out.println("🗑️ Sala " + roomCode + " eliminada de la base de datos");
         } catch (Exception e) {
-            System.err.println("❌ Error eliminando sala: " + e.getMessage());
+            System.err.println(" Error eliminando sala: " + e.getMessage());
         }
     }
 
-    // AGREGAR método para victoria (cuando ganas)
     @Transactional
     public void onGameWon(String roomCode) {
         GameRoom room = getOrLoadRoom(roomCode);
 
-        System.out.println("🎉 VICTORIA en sala " + roomCode);
-
-        // 1. PRIMERO: Desactivar sesiones
         for (Player p : room.getPlayers()) {
             if (p.getUserAccount() != null) {
                 UserAccount account = p.getUserAccount();
                 account.endSession();
-                System.out.println("🔓 Sesión desactivada para " + p.getPlayerName() +
-                        " (hasActiveSession: " + account.isHasActiveSession() + ")");
+                distributedCache.endSession(p.getPlayerName()); //  Redis
             }
 
-            // 2. Resetear jugador pero mantenerlo en sala
             p.setReady(false);
             p.setHealth(Player.DEFAULT_HEALTH);
             p.setX(0);
             p.setY(0);
-
             playerRepository.save(p);
         }
 
-        // 3. Marcar partida como terminada
         room.setGameStarted(false);
         gameRoomRepository.save(room);
-
-        // 4. Resetear XP
         experienceService.resetRoomXp(roomCode);
 
-        // 5. Notificar victoria
         Map<String, Object> event = new HashMap<>();
         event.put("type", "GAME_WON");
         event.put("roomCode", roomCode);
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event", event);
 
-        // 6. Limpiar sala del caché
-        roomCache.remove(roomCode);
-
-        System.out.println("✅ Victoria procesada - Jugadores liberados");
+        distributedCache.deleteRoom(roomCode); //  Redis
     }
 
-    // AGREGAR verificación en checkGameOver
     private void checkGameOver(String roomCode) {
         GameRoom room = getOrLoadRoom(roomCode);
 
@@ -522,14 +431,10 @@ public class GamePlayServices {
                 .allMatch(p -> !p.isAlive());
 
         if (allDead) {
-            System.out.println("⚠️ Todos los jugadores muertos - Ejecutando Game Over");
             onGameLost(roomCode);
         }
     }
 
-    /**
-     * Obtiene los cofres activos de una sala (para el frontend)
-     */
     public List<Map<String, Object>> getChestsForRoom(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
         if (room.getMap() == null) {

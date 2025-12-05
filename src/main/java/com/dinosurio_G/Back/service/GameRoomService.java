@@ -40,30 +40,30 @@ public class GameRoomService {
     @Autowired
     private ExperienceService experienceService;
 
-    /**
-     * Crear una nueva sala
-     * Ahora requiere que el host tenga una cuenta de usuario
-     */
+    @Autowired
+    private DistributedCacheService distributedCache; //  NUEVO
+
     @Transactional
     public GameRoom createRoom(String roomName, int maxPlayers, String playerName) {
 
-        // Buscar la cuenta de usuario por playerName
         UserAccount hostAccount = userAccountRepository.findByPlayerName(playerName)
                 .orElseThrow(() -> new RuntimeException("El jugador " + playerName + " no está registrado"));
 
-        // VALIDACIÓN: Verificar si el jugador ya está en una partida activa
+        // VALIDACIÓN con Redis
+        if (distributedCache.hasActiveSession(playerName)) {
+            throw new GameConflictException("Ya tienes una sesión activa en otro dispositivo. " +
+                    "Cierra la otra sesión primero.");
+        }
+
         Player existingPlayer = playerRepository.findByPlayerName(playerName).orElse(null);
         if (existingPlayer != null && existingPlayer.getGameRoom() != null) {
             GameRoom currentRoom = existingPlayer.getGameRoom();
 
-            // Si la sala actual está en juego, no permitir crear nueva sala
             if (currentRoom.isGameStarted()) {
                 throw new GameConflictException("No puedes crear una sala mientras estás en una partida activa. " +
                         "Termina tu partida actual primero (Sala: " + currentRoom.getRoomCode() + ")");
             }
 
-            // Si la sala no está iniciada, limpiar automáticamente
-            System.out.println(" Limpiando sala anterior (no iniciada) para " + playerName);
             existingPlayer.setGameRoom(null);
             existingPlayer.setReady(false);
             existingPlayer.setHost(false);
@@ -72,20 +72,17 @@ public class GameRoomService {
             playerRepository.save(existingPlayer);
         }
 
-        // Crear la sala
         GameRoom room = new GameRoom();
         room.setRoomName(roomName);
         room.setMaxPlayers(maxPlayers);
         room.setRoomCode(UUID.randomUUID().toString().substring(0, 6).toUpperCase());
         room.setGameStarted(false);
 
-        // Asignar un mapa nuevo por sala
         GameMap map = gameMapService.createMapForRoom();
         room.setMap(map);
 
         GameRoom savedRoom = gameRoomRepository.save(room);
 
-        // Crear el Player vinculado al UserAccount
         Player host;
         if (existingPlayer != null) {
             host = existingPlayer;
@@ -102,29 +99,23 @@ public class GameRoomService {
 
         savedRoom.getPlayers().add(host);
 
-        // ACTIVAR SESIÓN al crear sala
+        // ACTIVAR SESIÓN en BD y Redis
         hostAccount.startSession();
         userAccountRepository.save(hostAccount);
-        System.out.println(" Sesión activada para " + playerName);
+        distributedCache.startSession(playerName); //  Redis
 
         return gameRoomRepository.save(savedRoom);
     }
 
-    // Listar todas las salas
     public List<GameRoom> getAllRooms() {
         return gameRoomRepository.findAll();
     }
 
-    // Buscar sala por código
     public GameRoom getRoomByCode(String roomCode) {
         return gameRoomRepository.findByRoomCode(roomCode)
                 .orElseThrow(() -> new RuntimeException("La sala con código " + roomCode + " no existe"));
     }
 
-    /**
-     * Unirse a una sala
-     * Ahora requiere que el jugador tenga una cuenta de usuario
-     */
     @Transactional
     public GameRoom joinRoom(String roomCode, String playerName) {
         GameRoom room = getRoomByCode(roomCode);
@@ -133,47 +124,38 @@ public class GameRoomService {
             throw new RuntimeException("La sala está llena");
         }
 
-        // VALIDACIÓN: No permitir unirse a una sala que ya empezó
         if (room.isGameStarted()) {
             throw new RuntimeException("No puedes unirte a una partida que ya ha comenzado");
         }
 
-        // Buscar la cuenta de usuario
         UserAccount userAccount = userAccountRepository.findByPlayerName(playerName)
                 .orElseThrow(() -> new RuntimeException("El jugador " + playerName + " no está registrado"));
 
-        // Verificar si ya existe un Player con ese nombre
         Player player = playerRepository.findByPlayerName(playerName).orElse(null);
 
-        // VALIDACIÓN MEJORADA: Verificar si está en otra partida ACTIVA
         if (player != null && player.getGameRoom() != null) {
             GameRoom currentRoom = player.getGameRoom();
 
-            // Si está en la misma sala, permitir (reconexión)
             if (currentRoom.getId().equals(room.getId())) {
                 System.out.println(" Reconexión de " + playerName + " a la sala " + roomCode);
                 return gameRoomRepository.save(room);
             }
 
-            // Si está en otra sala y esa sala está en juego, bloquear
             if (currentRoom.isGameStarted()) {
                 throw new GameConflictException("Ya estás en una partida activa (Sala: " +
                         currentRoom.getRoomCode() + "). Termina tu partida actual antes de unirte a otra.");
             }
 
-            // Si está en otra sala que NO ha empezado, limpiar automáticamente
-            System.out.println(" Limpiando sala anterior (no iniciada) para " + playerName);
             currentRoom.getPlayers().remove(player);
             gameRoomRepository.save(currentRoom);
         }
 
-        // VALIDACIÓN ANTI-SUPLANTACIÓN: Verificar si tiene sesión activa
-        if (userAccount.isHasActiveSession()) {
+        // VALIDACIÓN con Redis
+        if (distributedCache.hasActiveSession(playerName)) {
             throw new GameConflictException("Esta cuenta ya tiene una sesión activa en otro dispositivo. " +
                     "Cierra la otra sesión primero.");
         }
 
-        // Crear o reutilizar el Player
         if (player == null) {
             player = new Player();
             player.setUserAccount(userAccount);
@@ -186,10 +168,10 @@ public class GameRoomService {
             player.setReady(false);
             playerRepository.save(player);
 
-            // ACTIVAR SESIÓN al unirse a sala
+            // ACTIVAR SESIÓN en BD y Redis
             userAccount.startSession();
             userAccountRepository.save(userAccount);
-            System.out.println(" Sesión activada para " + playerName);
+            distributedCache.startSession(playerName); //  Redis
         }
 
         return gameRoomRepository.save(room);
@@ -199,7 +181,6 @@ public class GameRoomService {
     public GameRoom startGame(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
 
-        // VALIDACIÓN: Verificar que ningún jugador esté en otra partida activa
         for (Player player : room.getPlayers()) {
             Player dbPlayer = playerRepository.findByPlayerName(player.getPlayerName())
                     .orElseThrow(() -> new RuntimeException("Jugador no encontrado: " + player.getPlayerName()));
@@ -212,66 +193,47 @@ public class GameRoomService {
             }
         }
 
-        // 1) Reset XP antes de empezar
         experienceService.resetRoomXp(roomCode);
-
-        // 2) Spawn players (esto posiciona y persiste jugadores)
         gamePlayServices.spawnPlayers(roomCode);
 
-        // 3) marcamos la sala como iniciada y persistimos
         room.setGameStarted(true);
         GameRoom saved = gameRoomRepository.saveAndFlush(room);
-        System.out.println(" GAME STARTED? -> " + saved.isGameStarted());
 
-        // 4) Notificar a todos los clientes que la partida empezó
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event",
                 Map.of("type", "GAME_STARTED", "roomCode", roomCode));
 
-        // 5) Enviar estado completo inmediatamente
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/state",
                 GameRoomMapper.toDTO(saved));
 
         return saved;
     }
 
-    /**
-     * Método para terminar una partida y liberar a los jugadores
-     */
     @Transactional
     public void endGame(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
-
-        // Marcar partida como terminada
         room.setGameStarted(false);
 
-        // Desactivar sesiones de todos los jugadores
         for (Player player : room.getPlayers()) {
             UserAccount account = player.getUserAccount();
             if (account != null) {
                 account.endSession();
                 userAccountRepository.save(account);
-                System.out.println(" Sesión finalizada para " + player.getPlayerName());
+                distributedCache.endSession(player.getPlayerName()); //  Redis
             }
         }
 
         gameRoomRepository.save(room);
 
-        // Notificar a los clientes
         messagingTemplate.convertAndSend("/topic/game/" + roomCode + "/event",
                 Map.of("type", "GAME_ENDED", "roomCode", roomCode));
     }
 
-    /**
-     * Método para salir de una sala (solo si la partida NO ha empezado)
-     */
     @Transactional
     public void leaveRoom(String roomCode, String playerName) {
         GameRoom room = getRoomByCode(roomCode);
 
-        // VALIDACIÓN: No permitir salir de una partida en curso
         if (room.isGameStarted()) {
-            throw new RuntimeException("No puedes salir de una partida que ya ha comenzado. " +
-                    "Espera a que termine.");
+            throw new RuntimeException("No puedes salir de una partida que ya ha comenzado.");
         }
 
         Player player = playerRepository.findByPlayerName(playerName)
@@ -283,37 +245,34 @@ public class GameRoomService {
             player.setReady(false);
             player.setHost(false);
 
-            // Desactivar sesión
             UserAccount account = player.getUserAccount();
             if (account != null) {
                 account.endSession();
                 userAccountRepository.save(account);
+                distributedCache.endSession(playerName); //  Redis
             }
 
             playerRepository.save(player);
             gameRoomRepository.save(room);
-
-            System.out.println(" " + playerName + " salió de la sala " + roomCode);
         }
     }
 
-    // Eliminar sala
     @Transactional
     public void deleteRoom(String roomCode) {
         GameRoom room = getRoomByCode(roomCode);
 
-        // Liberar a todos los jugadores
         for (Player player : room.getPlayers()) {
             UserAccount account = player.getUserAccount();
             if (account != null) {
                 account.endSession();
                 userAccountRepository.save(account);
+                distributedCache.endSession(player.getPlayerName()); //  Redis
             }
             player.setGameRoom(null);
             playerRepository.save(player);
         }
 
         gameRoomRepository.delete(room);
-        System.out.println(" Sala " + roomCode + " eliminada");
+        distributedCache.deleteRoom(roomCode); //  Redis
     }
 }
